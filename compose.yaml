@@ -1,9 +1,39 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    image: postgres:17-alpine
+    container_name: fitness_postgres
+    restart: unless-stopped
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: ${POSTGRES_DB:-fitness_db}
+      POSTGRES_USER: ${POSTGRES_USER:-fitness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - '5432'
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fitness} -d ${POSTGRES_DB:-fitness_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Only started with `--profile prod`, so local runs (and the Spring Boot
+  # docker-compose integration) bring up just the database.
+  app:
+    profiles: [ "prod" ]
+    image: djmaldonado19/fitness-app-backend:${VERSION:-latest}
+    build: .
+    container_name: fitness_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-fitness_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-fitness}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
