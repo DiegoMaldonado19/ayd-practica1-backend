@@ -2,8 +2,9 @@
 
 ## Dependencies
 
-### Docker Compose Support - DEVELOPER TOOLS
-Provides docker compose support for enhanced development experience.
+### Spring Boot DevTools - DEVELOPER TOOLS
+Restarts the running application when the compiled classes change, which is what
+makes `docker compose up -d` pick up code changes without a rebuild.
 
 ### Spring Web - WEB
 Build web, including RESTful, applications using Spring MVC. Uses Apache Tomcat

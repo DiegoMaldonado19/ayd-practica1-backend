@@ -21,13 +21,18 @@ services:
       timeout: 5s
       retries: 5
 
-  # Only started with `--profile prod`, so local runs (and the Spring Boot docker-compose integration) bring up just the database.
   app:
-    profiles: [ "prod" ]
-    image: djmaldonado19/fitness-app-backend:${VERSION:-latest}
-    build: .
+    image: maven:3.9-eclipse-temurin-25
     container_name: fitness_backend
     restart: unless-stopped
+    working_dir: /app
+    # Background loop recompiles whatever changed under src/main; spring-boot-devtools
+    # sees the new classes in target/ and restarts the application on its own.
+    # ponytail: 2s find poll. Swap for inotifywait only if the poll ever costs more than it saves.
+    command: >
+      sh -c "touch /tmp/build;
+      { while sleep 2; do find src/main -newer /tmp/build -print -quit | grep -q . && { touch /tmp/build; mvn -q compile; }; done; } &
+      mvn spring-boot:run"
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,6 +42,13 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-fitness_dev}
     ports:
       - "8080:8080"
+    volumes:
+      - .:/app
+      - maven_repo:/root/.m2
+      # Named volume so container builds never drop root-owned artifacts on the host tree.
+      - build_output:/app/target
 
 volumes:
   postgres_data:
+  maven_repo:
+  build_output:
