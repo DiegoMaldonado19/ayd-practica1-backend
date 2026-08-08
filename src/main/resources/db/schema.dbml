@@ -1,0 +1,847 @@
+// =============================================================================
+// Gym Management System - Practica 1, Analisis y Diseno de Sistemas 1
+// Entity-relationship diagram. Render at https://dbdiagram.io/d
+//
+// Generated from schema.sql, which is the single source of truth: if the two
+// ever disagree, the .sql wins and this file is regenerated.
+//
+// About the Enum blocks: they are diagram notation only. PostgreSQL declares no
+// CREATE TYPE at all - every one of these is a VARCHAR(n) + CHECK (col IN (...))
+// in schema.sql, mapped in Java with @Enumerated(EnumType.STRING). The reason is
+// in 04-Base-de-Datos.md, section 2: ALTER TYPE is not transactional in Postgres,
+// while a CHECK can be replaced without locking the table.
+//
+// About the Note blocks: DBML has no syntax for partial indexes
+// (CREATE UNIQUE INDEX ... WHERE ...). Those carry real business rules - one
+// membership in force, one open visit, one published routine - so each one is
+// written into the Note of its table instead of being silently dropped.
+//
+// 31 tables, 40 enums, 25 indexes.
+// =============================================================================
+
+
+// =============================================================================
+// ENUMS - closed value sets, VARCHAR + CHECK in the physical schema
+// =============================================================================
+
+// iam and directory
+Enum document_type            { DPI; PASSPORT; NIT }
+Enum app_role                 { ADMIN; RECEPTIONIST; TRAINER; MEMBER }
+Enum user_status              { ACTIVE; INACTIVE; BLOCKED; PENDING_ACTIVATION }
+Enum verification_channel     { EMAIL; SMS }
+Enum verification_code_type   { TWO_FACTOR; PASSWORD_RESET }
+Enum verification_code_status { ISSUED; USED; EXPIRED }
+Enum member_status            { ACTIVE; INACTIVE; WITHDRAWN }
+Enum employee_position        { ADMIN; RECEPTIONIST; TRAINER }
+Enum employee_status          { ACTIVE; SUSPENDED; TERMINATED }
+Enum trainer_specialty_type   { WEIGHT_LOSS; MUSCLE_GAIN; REHABILITATION; FUNCTIONAL; CARDIO }
+
+// membership
+Enum billing_period      { MONTHLY; QUARTERLY; SEMIANNUAL; ANNUAL }
+Enum membership_status   { ACTIVE; FROZEN; EXPIRED; CANCELLED }
+Enum cancellation_reason { COST; RELOCATION; DISSATISFACTION; INJURY; OTHER }
+Enum freeze_reason       { TRAVEL; INJURY; ILLNESS; WORK; OTHER }
+
+// access and billing
+Enum access_channel   { FRONT_DESK; SELF_SERVICE }
+Enum guest_pass_type  { FREE_TRIAL; PAID_DAY_PASS; MEMBER_GUEST }
+Enum discount_type    { PERCENTAGE; FIXED_AMOUNT }
+Enum payment_concept  { MEMBERSHIP; GUEST_PASS; OTHER }
+Enum payment_method   { CASH; DEBIT_CARD; CREDIT_CARD; TRANSFER }
+Enum payment_status   { REGISTERED; CONFIRMED; VOIDED }
+
+// classes
+Enum discipline_type   { YOGA; SPINNING; CROSSFIT; ZUMBA; FUNCTIONAL; PILATES; BOXING; OTHER }
+Enum difficulty_level  { BEGINNER; INTERMEDIATE; ADVANCED }
+Enum weekday           { MONDAY; TUESDAY; WEDNESDAY; THURSDAY; FRIDAY; SATURDAY; SUNDAY }
+Enum session_status    { SCHEDULED; IN_PROGRESS; COMPLETED; CANCELLED }
+Enum enrollment_status { ENROLLED; CANCELLED; ATTENDED; ABSENT }
+Enum waitlist_status   { WAITING; NOTIFIED; PROMOTED; EXPIRED; CANCELLED }
+
+// training
+Enum assignment_end_reason { REASSIGNMENT; TRAINER_LEFT; PLAN_DOWNGRADE; MEMBER_REQUEST }
+Enum muscle_group          { CHEST; BACK; LEGS; SHOULDERS; ARMS; CORE; CARDIO; FULL_BODY }
+Enum routine_status        { DRAFT; PUBLISHED; ARCHIVED }
+Enum note_type             { NUTRITION; TRAINING; GENERAL }
+Enum alert_type            { REASSIGNMENT; SPECIAL_ATTENTION }
+Enum alert_status          { PENDING; RESOLVED; DISMISSED }
+
+// nutrition
+Enum food_category    { PROTEIN; CARBOHYDRATE; FAT; VEGETABLE; FRUIT; DAIRY; BEVERAGE; PREPARED; OTHER }
+Enum serving_unit     { GRAM; MILLILITER; UNIT }
+Enum meal_type        { BREAKFAST; LUNCH; DINNER; SNACK }
+Enum goal_type        { WEIGHT_LOSS; MUSCLE_GAIN; MAINTENANCE }
+Enum goal_defined_by  { MEMBER; TRAINER }
+
+// notification
+Enum notification_type {
+  MEMBERSHIP_EXPIRING; MEMBERSHIP_EXPIRED; MEMBERSHIP_FROZEN; MEMBERSHIP_REACTIVATED
+  WAITLIST_SEAT_AVAILABLE; SESSION_CANCELLED; SESSION_RESCHEDULED
+  TRAINER_ASSIGNED; TRAINER_ALERT; PAYMENT_CONFIRMED
+}
+Enum notification_channel { EMAIL; SMS; IN_APP }
+Enum notification_status  { PENDING; SENT; FAILED; READ }
+
+
+// =============================================================================
+// MODULE: directory - people and their files
+// Declared first because app_user depends on person.
+// =============================================================================
+
+Table person {
+  person_id       bigint        [pk, increment]
+  document_type   document_type [not null]
+  document_number varchar(25)   [not null]
+  first_name      varchar(50)   [not null]
+  last_name       varchar(50)   [not null]
+  gender          varchar(20)
+  birth_date      date
+  email           varchar(120)
+  phone           varchar(20)
+  address         varchar(200)
+  created_at      timestamptz   [not null, default: `now()`]
+
+  indexes {
+    (document_type, document_number) [unique, name: 'uq_person_document']
+  }
+
+  Note: '''
+  Anyone the gym holds identity data about: members, employees and walk-in guests.
+  Splitting it from member/employee is what lets a guest exist without credentials
+  and a trainer also be a member, without duplicating name, document or phone.
+
+  gender is free text and not an enum on purpose: it is not a closed set the code
+  branches on, so a CHECK would only reject values it has no reason to reject.
+
+  Partial index uq_person_email: UNIQUE (LOWER(email)) WHERE email IS NOT NULL.
+  Two people must not share an email - it is where the 2FA code is sent.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: iam - identity, access and security
+// =============================================================================
+
+Table app_user {
+  app_user_id         bigint              [pk, increment]
+  person_id           bigint              [not null, unique, ref: - person.person_id]
+  username            varchar(50)         [not null, unique]
+  password_hash       varchar(100)        [not null]
+  role                app_role            [not null]
+  status              user_status         [not null, default: 'PENDING_ACTIVATION']
+  two_factor_enabled  boolean             [not null, default: true]
+  two_factor_channel  verification_channel [not null, default: 'EMAIL']
+  failed_attempts     smallint            [not null, default: 0]
+  locked_until        timestamptz
+  last_login_at       timestamptz
+  password_changed_at timestamptz
+  created_at          timestamptz         [not null, default: `now()`]
+
+  Note: '''
+  Credentials and role of a person who can sign in. The four roles are fixed by
+  the statement, so they are an enum: a role/permission/role_permission/user_role
+  RBAC would be four tables serving four constant values.
+  '''
+}
+
+Table verification_code {
+  verification_code_id bigint                   [pk, increment]
+  app_user_id          bigint                   [not null, ref: > app_user.app_user_id]
+  code_type            verification_code_type   [not null]
+  channel              verification_channel     [not null]
+  code_hash            varchar(100)             [not null]
+  masked_destination   varchar(120)             [not null]
+  status               verification_code_status [not null, default: 'ISSUED']
+  attempt_count        smallint                 [not null, default: 0]
+  issued_at            timestamptz              [not null, default: `now()`]
+  expires_at           timestamptz              [not null]
+  used_at              timestamptz
+
+  indexes {
+    (app_user_id, code_type, status) [name: 'ix_verif_code_user_status']
+  }
+
+  Note: '''
+  Temporary codes for two-factor login and password recovery. The code is stored
+  hashed; masked_destination is a deliberate snapshot of where it was sent, so a
+  later change of email does not rewrite the audit trail.
+
+  SMS exists because the statement asks for it, but there is no SMS provider: an
+  SMS code is written to the application log. Only EMAIL actually leaves the system.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: directory (continued) - member, employee and trainer files
+// =============================================================================
+
+Table member {
+  member_id               bigint        [pk, increment]
+  person_id               bigint        [not null, unique, ref: - person.person_id]
+  member_code             varchar(20)   [not null, unique]
+  joined_on               date          [not null, default: `CURRENT_DATE`]
+  status                  member_status [not null, default: 'ACTIVE']
+  emergency_contact_name  varchar(100)
+  emergency_contact_phone varchar(20)
+  terminated_on           date
+  notes                   varchar(300)
+
+  Note: '''
+  The gym customer file. It holds no plan, no expiry date and no trainer: those
+  belong to membership and trainer_assignment, the entities that actually change
+  over time.
+  '''
+}
+
+Table employee {
+  employee_id   bigint            [pk, increment]
+  person_id     bigint            [not null, unique, ref: - person.person_id]
+  employee_code varchar(20)       [not null, unique]
+  position      employee_position [not null]
+  hired_on      date              [not null]
+  terminated_on date
+  status        employee_status   [not null, default: 'ACTIVE']
+
+  Note: '''
+  Staff file. position drives what the person does at the gym; the sign-in role
+  lives in app_user.role, because an employee may exist before having an account.
+  '''
+}
+
+Table trainer {
+  trainer_id      bigint       [pk, increment]
+  employee_id     bigint       [not null, unique, ref: - employee.employee_id]
+  max_member_load smallint     [not null, default: 20]
+  bio             varchar(500)
+  active          boolean      [not null, default: true]
+
+  Note: '''
+  Specialization of employee. Its own table and not a nullable column on employee
+  because only trainers carry a member load cap, and every training table points
+  here rather than at employee.
+  '''
+}
+
+Table trainer_specialty {
+  trainer_id   bigint                  [not null, ref: > trainer.trainer_id]
+  specialty    trainer_specialty_type  [not null]
+  certified_on date
+
+  indexes {
+    (trainer_id, specialty) [pk]
+  }
+
+  Note: 'A trainer may hold several specialties, so 1NF forces a child table.'
+}
+
+
+// =============================================================================
+// MODULE: membership - plans, contracts and lifecycle
+// =============================================================================
+
+Table membership_plan {
+  membership_plan_id        bigint         [pk, increment]
+  code                      varchar(20)    [not null, unique]
+  name                      varchar(60)    [not null]
+  description               varchar(300)
+  billing_period            billing_period [not null]
+  price                     numeric(10,2)  [not null]
+  tier                      smallint       [not null, unique]
+  includes_group_classes    boolean        [not null, default: false]
+  weekly_class_limit        smallint
+  includes_personal_trainer boolean        [not null, default: false]
+  active                    boolean        [not null, default: true]
+  created_at                timestamptz    [not null, default: `now()`]
+
+  Note: '''
+  Plan catalog maintained by the administrator. Benefits are columns and not a
+  benefit/plan_benefit pair because the statement fixes which benefits exist and
+  only lets the team add new levels - and a new level is a row.
+
+  tier: 1 = Basic, 2 = Premium, 3 = Elite. Drives upgrade vs downgrade AND
+  waitlist priority, so it is stored once.
+  weekly_class_limit NULL means unlimited when classes are included.
+  '''
+}
+
+Table membership {
+  membership_id       bigint             [pk, increment]
+  member_id           bigint             [not null, ref: > member.member_id]
+  membership_plan_id  bigint             [not null, ref: > membership_plan.membership_plan_id]
+  paid_price          numeric(10,2)      [not null]
+  start_date          date               [not null]
+  end_date            date               [not null]
+  status              membership_status  [not null, default: 'ACTIVE']
+  cancelled_on        date
+  cancellation_reason cancellation_reason
+  notes               varchar(300)
+  created_by_user_id  bigint             [not null, ref: > app_user.app_user_id]
+  created_at          timestamptz        [not null, default: `now()`]
+
+  indexes {
+    (end_date) [name: 'ix_membership_end_date']
+  }
+
+  Note: '''
+  One row per contract. The renewal history is the set of rows of one member
+  ordered by start_date, so no self-referencing "previous contract" link is kept.
+  paid_price freezes what the member agreed to, so the administrator can change
+  membership_plan.price without rewriting contracts already signed.
+
+  Partial index uq_membership_in_force: UNIQUE (member_id)
+    WHERE status IN (ACTIVE, FROZEN). Only one contract in force at a time.
+  ix_membership_end_date is partial too: WHERE status = ACTIVE.
+  '''
+}
+
+Table membership_freeze {
+  membership_freeze_id   bigint       [pk, increment]
+  membership_id          bigint       [not null, ref: > membership.membership_id]
+  reason                 freeze_reason [not null]
+  reason_detail          varchar(300)
+  requested_on           date         [not null, default: `CURRENT_DATE`]
+  start_date             date         [not null]
+  expected_end_date      date
+  reactivated_on         date
+  authorized_by_user_id  bigint       [not null, ref: > app_user.app_user_id]
+  reactivated_by_user_id bigint       [ref: > app_user.app_user_id]
+
+  Note: '''
+  Freeze periods. The number of frozen days is derived from the two dates and
+  never stored. The per-cycle limit is enforced by the service, because it is a
+  tunable policy and not a structural invariant.
+
+  There is no status column: the freeze is in progress while reactivated_on IS
+  NULL. Partial index uq_freeze_in_progress: UNIQUE (membership_id)
+    WHERE reactivated_on IS NULL.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: access - attendance and guest passes
+// =============================================================================
+
+Table facility_visit {
+  facility_visit_id      bigint         [pk, increment]
+  member_id              bigint         [not null, ref: > member.member_id]
+  membership_id          bigint         [not null, ref: > membership.membership_id]
+  checked_in_at          timestamptz    [not null, default: `now()`]
+  checked_out_at         timestamptz
+  channel                access_channel [not null, default: 'FRONT_DESK']
+  checked_in_by_user_id  bigint         [not null, ref: > app_user.app_user_id]
+  checked_out_by_user_id bigint         [ref: > app_user.app_user_id]
+
+  indexes {
+    (checked_in_at) [name: 'ix_visit_checked_in_at']
+  }
+
+  Note: '''
+  Check-in / check-out. membership_id records under which contract the member
+  walked in, which keeps the attendance report correct after a renewal.
+
+  Partial index uq_visit_open: UNIQUE (member_id) WHERE checked_out_at IS NULL.
+  A member cannot check in twice without checking out first.
+  '''
+}
+
+Table guest_pass {
+  guest_pass_id         bigint          [pk, increment]
+  person_id             bigint          [not null, ref: > person.person_id]
+  pass_type             guest_pass_type [not null]
+  host_member_id        bigint          [ref: > member.member_id]
+  checked_in_at         timestamptz     [not null, default: `now()`]
+  notes                 varchar(200)
+  registered_by_user_id bigint          [not null, ref: > app_user.app_user_id]
+
+  indexes {
+    (checked_in_at) [name: 'ix_guest_pass_checked_in_at']
+  }
+
+  Note: '''
+  Trial passes and guests. The visitor is registered as a person, which is what
+  makes the "one free pass per person" rule enforceable by document number.
+  Guests have no check-out and no visit_date: the date of the visit is the date
+  part of checked_in_at.
+
+  Partial index uq_guest_pass_free_trial: UNIQUE (person_id)
+    WHERE pass_type = FREE_TRIAL. One free trial per person, ever.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: billing - payments, discounts and receipts
+// =============================================================================
+
+Table promotion {
+  promotion_id          bigint        [pk, increment]
+  code                  varchar(25)   [not null, unique]
+  name                  varchar(80)   [not null]
+  description           varchar(300)
+  discount_type         discount_type [not null]
+  discount_value        numeric(10,2) [not null]
+  valid_from            date          [not null]
+  valid_to              date          [not null]
+  max_uses              integer
+  max_uses_per_member   smallint
+  authorized_by_user_id bigint        [not null, ref: > app_user.app_user_id]
+  authorized_at         timestamptz   [not null, default: `now()`]
+  active                boolean       [not null, default: true]
+
+  Note: '''
+  Discounts and promotions, which only the administrator may authorize.
+
+  There is deliberately no current_uses counter: uses are
+  COUNT(*) FROM payment WHERE promotion_id = ?. A stored counter would drift the
+  first time a payment is voided. See 04-Base-de-Datos.md section 6.
+  '''
+}
+
+Table payment {
+  payment_id            bigint         [pk, increment]
+  member_id             bigint         [ref: > member.member_id]
+  membership_id         bigint         [ref: > membership.membership_id]
+  guest_pass_id         bigint         [ref: > guest_pass.guest_pass_id]
+  concept               payment_concept [not null]
+  payment_method        payment_method [not null]
+  gross_amount          numeric(10,2)  [not null]
+  promotion_id          bigint         [ref: > promotion.promotion_id]
+  discount_amount       numeric(10,2)  [not null, default: 0]
+  status                payment_status [not null, default: 'REGISTERED']
+  paid_at               timestamptz    [not null, default: `now()`]
+  receipt_series        varchar(5)
+  receipt_number        integer
+  receipt_issued_at     timestamptz
+  voided_at             timestamptz
+  void_reason           varchar(200)
+  registered_by_user_id bigint         [not null, ref: > app_user.app_user_id]
+
+  indexes {
+    (receipt_series, receipt_number) [unique, name: 'uq_payment_receipt']
+    (member_id, paid_at)             [name: 'ix_payment_member']
+    (paid_at)                        [name: 'ix_payment_paid_at']
+  }
+
+  Note: '''
+  One row per payment taken at the counter. The receipt is not a separate table
+  because it is 1:1 with the payment and adds only three attributes.
+  Not stored: the net total, which is gross_amount - discount_amount.
+  Stored on purpose: discount_amount, because the promotion may later be edited
+  and the amount actually charged must stay immutable.
+
+  member_id is NULLABLE: a visitor who pays their own PAID_DAY_PASS is a person,
+  not a member. ck_payment_target keeps every payment attributable anyway -
+  MEMBERSHIP and OTHER require a member, GUEST_PASS may leave it empty because
+  the payer is reachable through guest_pass.person_id.
+
+  ix_payment_paid_at is partial: WHERE status = CONFIRMED.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: classes - group classes, capacity and waitlist
+// =============================================================================
+
+Table group_class {
+  group_class_id   bigint           [pk, increment]
+  code             varchar(20)      [not null, unique]
+  name             varchar(60)      [not null]
+  discipline       discipline_type  [not null]
+  difficulty_level difficulty_level [not null, default: 'BEGINNER']
+  trainer_id       bigint           [not null, ref: > trainer.trainer_id]
+  weekday          weekday          [not null]
+  start_time       time             [not null]
+  duration_minutes smallint         [not null]
+  max_capacity     smallint         [not null]
+  active           boolean          [not null, default: true]
+  created_at       timestamptz      [not null, default: `now()`]
+
+  indexes {
+    (trainer_id, weekday, start_time) [unique, name: 'uq_group_class_slot']
+  }
+
+  Note: '''
+  Recurring definition: "spinning, Mondays at 18:00, capacity 20, trainer X".
+  A class that runs on more than one weekday is more than one row, which keeps
+  the model free of an extra schedule table.
+  uq_group_class_slot: a trainer cannot be booked twice in the same weekly slot.
+  '''
+}
+
+Table class_session {
+  class_session_id    bigint         [pk, increment]
+  group_class_id      bigint         [not null, ref: > group_class.group_class_id]
+  trainer_id          bigint         [not null, ref: > trainer.trainer_id]
+  session_date        date           [not null]
+  start_time          time           [not null]
+  max_capacity        smallint       [not null]
+  status              session_status [not null, default: 'SCHEDULED']
+  cancellation_reason varchar(200)
+  opened_at           timestamptz
+  closed_at           timestamptz
+
+  indexes {
+    (group_class_id, session_date) [unique, name: 'uq_session_date']
+    (session_date, start_time)     [name: 'ix_session_date']
+    (trainer_id, session_date)     [name: 'ix_session_trainer']
+  }
+
+  Note: '''
+  Dated occurrence of a class. Enrolment, capacity, attendance, cancellation and
+  the waitlist all hang off the session, never off the recurring definition.
+  trainer_id, start_time and max_capacity are copied from the class as defaults
+  but belong to the session: the administrator can reschedule a single date and
+  reassign its trainer. duration is NOT copied - rescheduling never changes it,
+  so it is read from group_class.
+  '''
+}
+
+Table class_enrollment {
+  class_enrollment_id  bigint            [pk, increment]
+  class_session_id     bigint            [not null, ref: > class_session.class_session_id]
+  member_id            bigint            [not null, ref: > member.member_id]
+  status               enrollment_status [not null, default: 'ENROLLED']
+  channel              access_channel    [not null, default: 'SELF_SERVICE']
+  enrolled_at          timestamptz       [not null, default: `now()`]
+  cancelled_at         timestamptz
+  attendance_marked_at timestamptz
+  enrolled_by_user_id  bigint            [not null, ref: > app_user.app_user_id]
+
+  indexes {
+    (class_session_id, member_id) [unique, name: 'uq_enroll_member']
+    (member_id, enrolled_at)      [name: 'ix_enroll_member']
+    (class_session_id)            [name: 'ix_enroll_session_active']
+  }
+
+  Note: '''
+  One row per member and session. Attendance is the status of the enrolment, not
+  a separate table: "did the enrolled member show up" is an attribute of the
+  enrolment itself.
+
+  Seats taken on a session = COUNT(*) WHERE status <> CANCELLED. Never stored.
+  ix_enroll_session_active is partial: WHERE status <> CANCELLED.
+  '''
+}
+
+Table waitlist_entry {
+  waitlist_entry_id     bigint          [pk, increment]
+  class_session_id      bigint          [not null, ref: > class_session.class_session_id]
+  member_id             bigint          [not null, ref: > member.member_id]
+  status                waitlist_status [not null, default: 'WAITING']
+  requested_at          timestamptz     [not null, default: `now()`]
+  notified_at           timestamptz
+  confirmation_deadline timestamptz
+  resolved_at           timestamptz
+
+  indexes {
+    (class_session_id, member_id)    [unique, name: 'uq_waitlist_member']
+    (class_session_id, requested_at) [name: 'ix_waitlist_pending']
+  }
+
+  Note: '''
+  Queue for a full session. There is no position column: the order is derived
+  from the member plan tier (Elite before Premium) and then requested_at, so it
+  cannot drift when somebody leaves the queue or changes plan.
+
+  ix_waitlist_pending is partial: WHERE status IN (WAITING, NOTIFIED).
+  '''
+}
+
+Table class_rating {
+  class_rating_id  bigint      [pk, increment]
+  class_session_id bigint      [not null, ref: > class_session.class_session_id]
+  member_id        bigint      [not null, ref: > member.member_id]
+  class_score      smallint    [not null]
+  trainer_score    smallint
+  comment          varchar(500)
+  rated_at         timestamptz [not null, default: `now()`]
+
+  indexes {
+    (class_session_id, member_id) [unique, name: 'uq_rating_member']
+  }
+
+  Note: '''
+  The member rates the class and, optionally, the trainer who taught it. One
+  table instead of two because both scores are given in the same act and share
+  the same key. Both scores are CHECKed to 1..5; trainer_score is optional.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: training - assignment, routines and physical progress
+// =============================================================================
+
+Table trainer_assignment {
+  trainer_assignment_id bigint                [pk, increment]
+  member_id             bigint                [not null, ref: > member.member_id]
+  trainer_id            bigint                [not null, ref: > trainer.trainer_id]
+  start_date            date                  [not null, default: `CURRENT_DATE`]
+  end_date              date
+  end_reason            assignment_end_reason
+  assigned_by_user_id   bigint                [not null, ref: > app_user.app_user_id]
+  created_at            timestamptz           [not null, default: `now()`]
+
+  indexes {
+    (trainer_id) [name: 'ix_assign_trainer_current']
+  }
+
+  Note: '''
+  Historical member-trainer relationship. A table and not a member.trainer_id
+  column precisely because the statement demands transferring a whole caseload
+  "without losing the history of routines and follow-up": reassigning closes one
+  row and opens another, and nothing is overwritten.
+
+  Partial index uq_assign_current: UNIQUE (member_id) WHERE end_date IS NULL.
+  A member has at most one trainer at a time; closed rows are the history.
+  Current caseload = COUNT(*) WHERE end_date IS NULL. Never stored.
+  ix_assign_trainer_current is partial too: WHERE end_date IS NULL.
+  '''
+}
+
+Table exercise {
+  exercise_id  bigint       [pk, increment]
+  code         varchar(30)  [not null, unique]
+  name         varchar(80)  [not null]
+  muscle_group muscle_group [not null]
+  description  varchar(300)
+  video_url    varchar(255)
+  active       boolean      [not null, default: true]
+
+  Note: '''
+  Exercise catalog the trainer picks from when building a routine. It stays a
+  table and not free text so that the same exercise is named identically across
+  routines. video_url is an optional demonstration link.
+  '''
+}
+
+Table routine {
+  routine_id   bigint         [pk, increment]
+  member_id    bigint         [not null, ref: > member.member_id]
+  trainer_id   bigint         [not null, ref: > trainer.trainer_id]
+  name         varchar(80)    [not null]
+  goal_summary varchar(300)
+  status       routine_status [not null, default: 'DRAFT']
+  start_date   date           [not null, default: `CURRENT_DATE`]
+  end_date     date
+  created_at   timestamptz    [not null, default: `now()`]
+  updated_at   timestamptz
+
+  Note: '''
+  Partial index uq_routine_published: UNIQUE (member_id)
+    WHERE status = PUBLISHED. Only one routine in force per member; the archived
+  ones are the history.
+  '''
+}
+
+Table routine_exercise {
+  routine_exercise_id bigint       [pk, increment]
+  routine_id          bigint       [not null, ref: > routine.routine_id]
+  exercise_id         bigint       [not null, ref: > exercise.exercise_id]
+  weekday             weekday      [not null]
+  display_order       smallint     [not null]
+  sets                smallint     [not null]
+  repetitions         smallint     [not null]
+  rest_seconds        smallint
+  notes               varchar(200)
+
+  indexes {
+    (routine_id, weekday, display_order) [unique, name: 'uq_rtn_ex_order']
+  }
+
+  Note: '''
+  Exercises of a routine. weekday lives here instead of in a routine_day table:
+  that table would have held nothing but the day of the week. display_order is
+  what gives the trainer a stable order within each day.
+  '''
+}
+
+Table progress_measurement {
+  progress_measurement_id bigint       [pk, increment]
+  member_id               bigint       [not null, ref: > member.member_id]
+  trainer_id              bigint       [not null, ref: > trainer.trainer_id]
+  measured_on             date         [not null, default: `CURRENT_DATE`]
+  weight_kg               numeric(5,2) [not null]
+  waist_cm                numeric(5,2)
+  arm_cm                  numeric(5,2)
+  leg_cm                  numeric(5,2)
+  body_fat_percent        numeric(4,2)
+  notes                   varchar(300)
+  created_at              timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (member_id, measured_on) [unique, name: 'uq_measure_date']
+  }
+
+  Note: '''
+  Periodic body measurements taken by the trainer. The statement fixes the list
+  of measures, so they are columns; an attribute-value table would be no more
+  normalized, only harder to query and to chart.
+  uq_measure_date avoids two measurements on the same day, which would make the
+  evolution chart ambiguous.
+  '''
+}
+
+Table trainer_note {
+  trainer_note_id bigint        [pk, increment]
+  member_id       bigint        [not null, ref: > member.member_id]
+  trainer_id      bigint        [not null, ref: > trainer.trainer_id]
+  note_type       note_type     [not null]
+  content         varchar(1000) [not null]
+  reference_date  date
+  created_at      timestamptz   [not null, default: `now()`]
+
+  indexes {
+    (member_id, created_at) [name: 'ix_note_member']
+  }
+
+  Note: '''
+  Free-text follow-up the trainer leaves for the member, including the
+  nutritional recommendations the statement asks for.
+  '''
+}
+
+Table trainer_alert {
+  trainer_alert_id    bigint       [pk, increment]
+  member_id           bigint       [not null, ref: > member.member_id]
+  trainer_id          bigint       [not null, ref: > trainer.trainer_id]
+  alert_type          alert_type   [not null]
+  description         varchar(500) [not null]
+  status              alert_status [not null, default: 'PENDING']
+  created_at          timestamptz  [not null, default: `now()`]
+  resolved_at         timestamptz
+  resolved_by_user_id bigint       [ref: > app_user.app_user_id]
+  resolution_notes    varchar(500)
+
+  indexes {
+    (created_at) [name: 'ix_alert_pending']
+  }
+
+  Note: '''
+  The trainer escalates to the administrator: either the member should be
+  reassigned to a colleague, or the member needs special attention.
+  ix_alert_pending is partial: WHERE status = PENDING.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: nutrition - food catalog, daily log and calorie goal
+// =============================================================================
+
+Table food {
+  food_id         bigint        [pk, increment]
+  code            varchar(30)   [not null, unique]
+  name            varchar(80)   [not null]
+  category        food_category [not null]
+  serving_size    numeric(7,2)  [not null]
+  serving_unit    serving_unit  [not null]
+  calories        numeric(7,2)  [not null]
+  protein_g       numeric(6,2)  [not null]
+  carbohydrates_g numeric(6,2)  [not null]
+  fat_g           numeric(6,2)  [not null]
+  active          boolean       [not null, default: true]
+  created_at      timestamptz   [not null, default: `now()`]
+
+  Note: '''
+  Master food catalog maintained by the administrator. The statement fixes the
+  four nutritional figures and all four depend on the food itself, so they are
+  columns rather than a nutrient / food_nutrient pair.
+  serving_size + serving_unit are the reference portion (for example 100 GRAM);
+  a member who ate 150 g is charged 1.5x these values, computed at query time.
+  '''
+}
+
+Table meal {
+  meal_id    bigint       [pk, increment]
+  member_id  bigint       [not null, ref: > member.member_id]
+  log_date   date         [not null, default: `CURRENT_DATE`]
+  meal_type  meal_type    [not null]
+  notes      varchar(200)
+  created_at timestamptz  [not null, default: `now()`]
+  updated_at timestamptz
+
+  indexes {
+    (member_id, log_date) [name: 'ix_meal_member_date']
+  }
+
+  Note: '''
+  One meal the member logged on a given day. There is no daily-diary header
+  table: it would have held nothing but the member and the date, both already
+  here. SNACK is deliberately not unique per day - the statement says "snacks".
+  '''
+}
+
+Table meal_item {
+  meal_item_id bigint       [pk, increment]
+  meal_id      bigint       [not null, ref: > meal.meal_id]
+  food_id      bigint       [not null, ref: > food.food_id]
+  quantity     numeric(7,2) [not null]
+
+  indexes {
+    (meal_id, food_id) [unique, name: 'uq_meal_item_food']
+  }
+
+  Note: '''
+  Foods that make up a meal, with the amount eaten expressed in the food own
+  serving unit. No calorie or macro total is stored: every figure the statement
+  asks for is SUM(quantity / food.serving_size * food.<column>).
+  '''
+}
+
+Table nutrition_goal {
+  nutrition_goal_id  bigint          [pk, increment]
+  member_id          bigint          [not null, ref: > member.member_id]
+  goal_type          goal_type       [not null]
+  daily_calories     numeric(6,2)    [not null]
+  tolerance_percent  numeric(4,2)    [not null, default: 10]
+  target_weight_kg   numeric(5,2)
+  defined_by         goal_defined_by [not null]
+  defined_by_user_id bigint          [not null, ref: > app_user.app_user_id]
+  start_date         date            [not null, default: `CURRENT_DATE`]
+  end_date           date
+
+  Note: '''
+  The member current goal: the calorie target the nutrition module compares the
+  day against, plus the physical target the trainer follows up on. Both are
+  attributes of the same decision, so they share a row.
+
+  There is deliberately no is_active flag: the goal in force is end_date IS NULL,
+  already guaranteed by the partial index uq_goal_current: UNIQUE (member_id)
+    WHERE end_date IS NULL. Superseded goals keep their end_date and become the
+  history.
+  '''
+}
+
+
+// =============================================================================
+// MODULE: notification - outgoing notices and in-app inbox
+// =============================================================================
+
+Table notification {
+  notification_id   bigint               [pk, increment]
+  app_user_id       bigint               [not null, ref: > app_user.app_user_id]
+  notification_type notification_type    [not null]
+  channel           notification_channel [not null, default: 'IN_APP']
+  title             varchar(120)         [not null]
+  message           varchar(1000)        [not null]
+  status            notification_status  [not null, default: 'PENDING']
+  created_at        timestamptz          [not null, default: `now()`]
+  sent_at           timestamptz
+  read_at           timestamptz
+  failure_reason    varchar(300)
+
+  indexes {
+    (app_user_id, created_at) [name: 'ix_notification_inbox']
+    (created_at)              [name: 'ix_notification_pending']
+  }
+
+  Note: '''
+  The message body is rendered in Java from the notification_type, so no template
+  table exists. ix_notification_pending is partial: WHERE status = PENDING.
+  '''
+}
