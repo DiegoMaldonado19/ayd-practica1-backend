@@ -1,19 +1,15 @@
 name: CI/CD Pipeline
 
 on:
-  # Manual trigger only. Uncomment the automatic triggers below once the
-  # server IP/path and the repository secrets are configured.
   workflow_dispatch:
-  # push:
-  #   branches: ["*"]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: [main]
 
 env:
   DOCKER_IMAGE: fitness-app-backend
   DOCKER_USERNAME: djmaldonado19
-  # SERVER_IP:
-  # SERVER_PATH:
 
 jobs:
   build:
@@ -49,26 +45,37 @@ jobs:
 
       - name: Deploy to server
         if: github.ref == 'refs/heads/main'
+        env:
+          SSH_KEY:     ${{ secrets.EC2_SSH_KEY }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          REPO_PATH:   ${{ secrets.REPO_PATH }}
+          DB_USER:     ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          VERSION:     ${{ github.run_number }}
         run: |
-          echo "Deploying to server ${{ env.SERVER_IP }}"
+          # compose.yaml carries a dev default for the DB password so a fresh
+          # clone just works. Production must never fall back to it.
+          : "${DB_PASSWORD:?the DB_PASSWORD secret is empty; refusing to deploy}"
 
-          sudo apt-get update
-          sudo apt-get install -y sshpass
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
 
-          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ env.SERVER_IP }} "
-            cd ${{ env.SERVER_PATH }} &&
-            git pull origin main &&
-            
-            echo 'POSTGRES_DB=fitness_db' > .env &&
-            echo 'POSTGRES_USER=${{ secrets.DB_USER }}' >> .env &&
-            echo 'POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}' >> .env &&
-            echo 'VERSION=${{ github.run_number }}' >> .env &&
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "
+            set -euo pipefail
+            cd '$REPO_PATH'
+            git pull origin main
 
-            docker compose --profile prod pull &&
-            docker compose --profile prod up -d &&
+            {
+              echo 'POSTGRES_DB=fitness_db'
+              echo 'POSTGRES_USER=$DB_USER'
+              echo 'POSTGRES_PASSWORD=$DB_PASSWORD'
+              echo 'VERSION=$VERSION'
+            } > .env
 
-            sleep 20 &&
-            docker compose --profile prod ps
+            docker compose --profile prod pull
+            docker compose --profile prod up -d --wait
           "
           echo "Deployment completed"
 
