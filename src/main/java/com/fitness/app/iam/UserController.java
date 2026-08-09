@@ -2,6 +2,7 @@ package com.fitness.app.iam;
 
 import com.fitness.app.iam.dto.AuthenticatedUser;
 import com.fitness.app.iam.dto.ChangePasswordRequest;
+import com.fitness.app.iam.dto.CreateUserRequest;
 import com.fitness.app.iam.dto.StatusChangeRequest;
 import com.fitness.app.iam.dto.TwoFactorRequest;
 import com.fitness.app.iam.dto.UserResponse;
@@ -12,16 +13,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
 
 /**
  * The /users routes. Who may call what is decided in SecurityConfig: /users/me/**
@@ -41,6 +46,14 @@ public class UserController
                                          Pageable                                   pageable)
     {
         return new PagedModel<>(userService.search(role, status, search, pageable));
+    }
+
+    @PostMapping
+    public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request)
+    {
+        var user = userService.create(request);
+
+        return ResponseEntity.created(URI.create("/api/v1/users/" + user.appUserId())).body(user);
     }
 
     @GetMapping("/{appUserId}")

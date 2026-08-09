@@ -14,6 +14,10 @@ public interface UserRepository extends JpaRepository<AppUser, Long>
 {
     Optional<AppUser> findByUsername(String username);
 
+    boolean existsByUsername(String username);
+
+    boolean existsByPersonId(Long personId);
+
     /**
      * One query with nullable filters instead of a Specification and its helper
      * classes. search matches the username only: matching the person's name
