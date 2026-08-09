@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -74,6 +75,17 @@ public class SecurityConfig
                     // the rest of /users belongs to the administrator.
                     .requestMatchers("/api/v1/users/me/**").authenticated()
                     .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
+                    // directory. Whether a member reaches *this* file is decided in
+                    // MemberService: a matcher sees the path, not the row behind it.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/members/*/status").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers("/api/v1/employees/**").hasRole("ADMIN")
+                    // A member reads the trainers to choose one; only the administrator writes them.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/trainers/**").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers("/api/v1/trainers/**").hasRole("ADMIN")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->
