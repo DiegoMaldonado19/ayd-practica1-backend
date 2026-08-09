@@ -25,6 +25,11 @@ public enum ErrorCode
     VERIFICATION_DESTINATION_MISSING(HttpStatus.CONFLICT,          "CONTACT_ADMIN",           "La cuenta no tiene un correo o teléfono registrado para enviar el código."),
     FORBIDDEN_RESOURCE            (HttpStatus.FORBIDDEN,           null,                      "Tu rol no tiene acceso a este recurso."),
     TRAINER_SCOPE_VIOLATION       (HttpStatus.FORBIDDEN,           null,                      "Solo puedes consultar datos de los socios que tienes asignados."),
+    USERNAME_TAKEN                (HttpStatus.CONFLICT,            null,                      "El nombre de usuario ya está en uso."),
+    PERSON_ALREADY_HAS_ACCOUNT    (HttpStatus.CONFLICT,            null,                      "La persona ya tiene una cuenta."),
+
+    // --- Directory ------------------------------------------------------------
+    DOCUMENT_ALREADY_REGISTERED   (HttpStatus.CONFLICT,            null,                      "Ya existe un expediente con ese documento."),
 
     // --- Membership and access ----------------------------------------------
     MEMBERSHIP_NOT_ACTIVE         (HttpStatus.CONFLICT,            "RENEW_MEMBERSHIP",        "La membresía no está activa."),
@@ -70,6 +75,9 @@ public enum ErrorCode
     ROUTE_NOT_FOUND               (HttpStatus.NOT_FOUND,           null,                      "La ruta solicitada no existe."),
     USER_NOT_FOUND                (HttpStatus.NOT_FOUND,           null,                      "La cuenta no existe."),
     PERSON_NOT_FOUND              (HttpStatus.NOT_FOUND,           null,                      "La persona no existe."),
+    MEMBER_NOT_FOUND              (HttpStatus.NOT_FOUND,           null,                      "El socio no existe."),
+    EMPLOYEE_NOT_FOUND            (HttpStatus.NOT_FOUND,           null,                      "El empleado no existe."),
+    TRAINER_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "El entrenador no existe."),
     VERIFICATION_CODE_NOT_FOUND   (HttpStatus.NOT_FOUND,           null,                      "El código de verificación no existe."),
 
     // --- Transversal ----------------------------------------------------------

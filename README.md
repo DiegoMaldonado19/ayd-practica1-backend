@@ -48,7 +48,7 @@ clone starts as it is.
 
 - API: `http://localhost:8080/api/v1`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- Postman collection: [`Docs/Fitness-App-IAM.postman_collection.json`](Docs/Fitness-App-IAM.postman_collection.json)
+- Postman collection: [`Docs/Fitness-App.postman_collection.json`](Docs/Fitness-App.postman_collection.json)
 
 Where the two-factor and recovery codes end up depends on `.env`:
 
