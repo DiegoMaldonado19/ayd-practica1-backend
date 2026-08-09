@@ -359,14 +359,16 @@ public class MembershipService
     // -- Helpers ------------------------------------------------------------------
 
     /**
-     * The contract in force, checked against the calendar too: the nightly task may
-     * not have run yet, and letting an expired contract pass would open the door the
-     * statement closes.
+     * The most recent contract: applies assertInForceAndActive to check if it is ACTIVE
+     * and distinguish FROZEN, EXPIRED and CANCELLED with their specific error codes.
+     * Also guards against calendar drift: the nightly task may not have run yet.
      */
     private Membership findActiveOrFail(Long memberId)
     {
-        var membership = membershipRepository.findByMemberIdAndStatus(memberId, MembershipStatus.ACTIVE)
+        var membership = membershipRepository.findFirstByMemberIdOrderByMembershipIdDesc(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBERSHIP_NOT_ACTIVE));
+
+        assertInForceAndActive(membership);
 
         if (membership.getEndDate().isBefore(LocalDate.now()))
         {
@@ -490,7 +492,7 @@ public class MembershipService
         var daysUsed  = inCycle.stream().mapToLong(freeze -> freeze.frozenDays(today)).sum();
         var projected = expectedEndDate == null ? 0 : ChronoUnit.DAYS.between(startDate, expectedEndDate);
 
-        if (daysUsed + projected >= gymProperties.freeze().maxDaysPerCycle())
+        if (daysUsed + projected > gymProperties.freeze().maxDaysPerCycle())
         {
             throw new BusinessException(ErrorCode.FREEZE_LIMIT_REACHED);
         }

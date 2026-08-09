@@ -54,6 +54,13 @@ public class PersonService
                 .collect(Collectors.toMap(PersonContactDTO::personId, Function.identity()));
     }
 
+    /** Creates or reuses a person and returns their contact info. */
+    @Transactional
+    public PersonContactDTO register(PersonRequestDTO data)
+    {
+        return toContact(createOrReuse(data));
+    }
+
     /**
      * Reuses the person behind the document instead of creating a second one: a
      * trainer who signs up as a member is the same person, and uq_person_document

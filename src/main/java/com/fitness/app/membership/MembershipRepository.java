@@ -15,8 +15,8 @@ import java.util.Optional;
 
 public interface MembershipRepository extends JpaRepository<Membership, Long>
 {
-    /** uq_membership_in_force guarantees at most one row, so an Optional is enough. */
-    Optional<Membership> findByMemberIdAndStatus(Long memberId, MembershipStatus status);
+    /** Most recent contract of a member, needed by findActiveOrFail. */
+    Optional<Membership> findFirstByMemberIdOrderByMembershipIdDesc(Long memberId);
 
     boolean existsByMemberIdAndStatusIn(Long memberId, Collection<MembershipStatus> statuses);
 

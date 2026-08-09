@@ -99,6 +99,9 @@ public class SecurityConfig
                     .requestMatchers(HttpMethod.POST,  "/api/v1/memberships").hasAnyRole("ADMIN", "RECEPTIONIST")
                     .requestMatchers(HttpMethod.POST,  "/api/v1/memberships/*/reactivations").hasAnyRole("ADMIN", "RECEPTIONIST")
                     .requestMatchers("/api/v1/memberships/**").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    // access. Check-in, check-out and guest passes are front desk only.
+                    .requestMatchers("/api/v1/visits/**").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers("/api/v1/guest-passes/**").hasAnyRole("ADMIN", "RECEPTIONIST")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->

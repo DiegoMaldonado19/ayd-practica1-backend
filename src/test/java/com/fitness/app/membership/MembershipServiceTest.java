@@ -57,7 +57,9 @@ class MembershipServiceTest
     @Mock private MemberService              memberService;
 
     // The real limits of application.yml: 15 days and 2 freezes per 90-day cycle.
-    @Spy private GymProperties gymProperties = new GymProperties(new GymProperties.Freeze(15, 2, 90));
+    @Spy private GymProperties gymProperties = new GymProperties(
+            new GymProperties.Freeze(15, 2, 90),
+            new GymProperties.GuestPass(1));
 
     @InjectMocks private MembershipService membershipService;
 
