@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: Fitness-App
+
+  # Reads the same .env that docker compose reads, so `mvn spring-boot:run` from the
+  # host uses the team's credentials without exporting anything. .env is KEY=value,
+  # which is already .properties syntax; the [.properties] hint only tells Boot which
+  # loader to use for a name it does not recognize.
+  #
+  # optional: a fresh clone has no .env (it is gitignored) and must still start.
+  config:
+    import: optional:file:./.env[.properties]
+
+  # Defaults aimed at `mvn spring-boot:run` against the Postgres of compose, which
+  # publishes 5432 on 127.0.0.1. Inside compose the app service sets
+  # SPRING_DATASOURCE_URL/USERNAME/PASSWORD, and an environment variable outranks
+  # this file, so the container keeps reaching the postgres host.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB:fitness_db}
+    username: ${POSTGRES_USER:fitness}
+    password: ${POSTGRES_PASSWORD:fitness_dev}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate          # The schema is governed by schema.sql, not Hibernate
+    open-in-view: false
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE   # snake_case payload, lowerCamelCase field
+
+  data:
+    web:
+      pageable:
+        serialization-mode: VIA_DTO        # Collections serialize as PagedModel<T>
+        max-page-size: 100                 # 03-API-REST §2: size defaults to 20, caps at 100
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      "mail.smtp.auth": true
+      "mail.smtp.starttls.enable": true
+
+server:
+  port: 8080
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:cambiar-por-un-secreto-de-al-menos-32-bytes}
+      access-minutes: 60
+  cors:
+    # On the server the origin is http://<host>:5173, not localhost: overridden per environment.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+# Parameterizable policies. The five rules the statement leaves to the team.
+gym:
+  freeze:
+    max-days-per-cycle: 15
+    max-count-per-cycle: 2
+    cycle-days: 90
+  guest-pass:
+    max-free-per-person: 1
+  class:
+    cancellation-window-hours: 2
+    waitlist-confirmation-minutes: 60
+  membership:
+    expiry-notice-days: 5
+  nutrition:
+    default-tolerance-percent: 10
