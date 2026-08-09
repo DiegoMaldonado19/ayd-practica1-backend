@@ -23,17 +23,22 @@ INSERT INTO person (document_type, document_number, first_name, last_name, email
 VALUES ('DPI', '1000000000101', 'System', 'Administrator', 'admin@fitnessapp.local', '00000000')
 ON CONFLICT (document_type, document_number) DO NOTHING;
 
--- !! REPLACE THE HASH BEFORE THE FIRST LOGIN !!
--- The value below is a placeholder, not a valid BCrypt digest: the account
--- cannot be used until the team generates a real one. Produce it with:
---     mvn -q compile exec:java -Dexec.mainClass=... , or simply run once
---     new BCryptPasswordEncoder().encode("your-password")
--- and then:
---     UPDATE app_user SET password_hash = '<hash>', status = 'ACTIVE'
---      WHERE username = 'admin';
+-- Credentials: admin / Admin123*
+-- The hash is a real BCrypt digest of that password, so a fresh `docker compose
+-- up` already has a working sign-in and the Postman collection runs end to end.
+--
+-- !! CHANGE IT ON THE SERVER !! It is a documented password in a public repo:
+--     PUT /api/v1/users/me/password after the first login, or
+--     UPDATE app_user SET password_hash = '<new hash>' WHERE username = 'admin';
+--
+-- two_factor_enabled is FALSE only for this bootstrap account, so the first
+-- login returns a token without a mail server in the loop. Every account created
+-- afterwards is born with two-factor on: the column DEFAULT in schema.sql is
+-- still TRUE. Turn it on here with PATCH /api/v1/users/me/two-factor.
 INSERT INTO app_user (person_id, username, password_hash, role, status, two_factor_enabled)
 VALUES ((SELECT person_id FROM person WHERE document_type = 'DPI' AND document_number = '1000000000101'),
-        'admin', 'REPLACE_WITH_BCRYPT_HASH', 'ADMIN', 'PENDING_ACTIVATION', TRUE)
+        'admin', '$2a$10$9aGJWpbE7.OoNtMi1vFrF.NJJp2.Yd83gVpuHDIUWaTh/9vZZLBMG',
+        'ADMIN', 'ACTIVE', FALSE)
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO employee (person_id, employee_code, position, hired_on, status)

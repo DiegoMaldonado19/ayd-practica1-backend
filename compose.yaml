@@ -40,6 +40,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-fitness_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-fitness}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-fitness_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-please-override-in-production-32b}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      # Empty on purpose: with no SMTP reachable, the verification code is written
+      # to this container's log instead of being delivered. Host and port keep the
+      # defaults of application.yml.
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
     ports:
       - "8080:8080"
     volumes:

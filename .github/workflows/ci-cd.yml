@@ -31,10 +31,11 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # Tests are skipped: the only test is a @SpringBootTest context load and it
-      # needs a live datasource. Drop -DskipTests once tests can run without one.
-      - name: Compile and package
-        run: mvn -B package -DskipTests
+      # Tests run here: they are plain Mockito unit tests with no Spring context
+      # and no datasource. The @SpringBootTest context load that forced
+      # -DskipTests was removed.
+      - name: Compile, test and package
+        run: mvn -B package
 
   docker-push:
     needs: build
@@ -75,17 +76,39 @@ jobs:
     environment: production
     steps:
       - name: Deploy over SSH
+        # Secret names mirror the keys of .env one to one, so what the pipeline
+        # writes on the server and what a developer keeps locally are the same file.
         env:
-          SSH_KEY:     ${{ secrets.EC2_SSH_KEY }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          REPO_PATH:   ${{ secrets.REPO_PATH }}
-          DB_USER:     ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SSH_KEY:           ${{ secrets.EC2_SSH_KEY }}
+          SERVER_USER:       ${{ secrets.SERVER_USER }}
+          SERVER_HOST:       ${{ secrets.SERVER_HOST }}
+          REPO_PATH:         ${{ secrets.REPO_PATH }}
+          POSTGRES_DB:       ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER:     ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET:        ${{ secrets.JWT_SECRET }}
+          # Optional. Empty falls back to http://<host>:5173 and to no mail server,
+          # which sends the verification codes to the application log.
+          CORS_ORIGINS:      ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          MAIL_USERNAME:     ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD:     ${{ secrets.MAIL_PASSWORD }}
         run: |
-          # compose.yaml carries a dev default for the DB password so a fresh
-          # clone just works. Production must never fall back to it.
-          : "${DB_PASSWORD:?the DB_PASSWORD secret is empty; refusing to deploy}"
+          # compose.yaml and application.yml carry dev defaults so a fresh clone
+          # just works. Production must never fall back to the two that matter.
+          : "${POSTGRES_PASSWORD:?the POSTGRES_PASSWORD secret is empty; refusing to deploy}"
+          : "${JWT_SECRET:?the JWT_SECRET secret is empty; refusing to deploy}"
+
+          # HS256 rejects a key under 32 bytes, and it does it at startup: without
+          # this check the deploy reports success and the API answers 500 on login.
+          [ ${#JWT_SECRET} -ge 32 ] \
+            || { echo "JWT_SECRET is ${#JWT_SECRET} characters; it needs at least 32"; exit 1; }
+
+          # The database name and user are not secrets, only overrides.
+          POSTGRES_DB="${POSTGRES_DB:-fitness_db}"
+          POSTGRES_USER="${POSTGRES_USER:-fitness}"
+
+          # The SPA is published on 5173 of the same host unless a secret says otherwise.
+          CORS_ALLOWED_ORIGINS="${CORS_ORIGINS:-http://$SERVER_HOST:5173}"
 
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
@@ -96,9 +119,13 @@ jobs:
               cd '$REPO_PATH'
               git pull origin main
               {
-                echo 'POSTGRES_DB=fitness_db'
-                echo 'POSTGRES_USER=$DB_USER'
-                echo 'POSTGRES_PASSWORD=$DB_PASSWORD'
+                echo 'POSTGRES_DB=$POSTGRES_DB'
+                echo 'POSTGRES_USER=$POSTGRES_USER'
+                echo 'POSTGRES_PASSWORD=$POSTGRES_PASSWORD'
+                echo 'JWT_SECRET=$JWT_SECRET'
+                echo 'CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS'
+                echo 'MAIL_USERNAME=$MAIL_USERNAME'
+                echo 'MAIL_PASSWORD=$MAIL_PASSWORD'
               } > .env
               docker compose pull
               docker compose up -d --remove-orphans --wait
