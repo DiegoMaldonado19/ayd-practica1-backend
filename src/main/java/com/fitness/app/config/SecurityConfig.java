@@ -82,10 +82,23 @@ public class SecurityConfig
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/members/*/status").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
                     .requestMatchers(HttpMethod.PUT,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/memberships").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
                     .requestMatchers("/api/v1/employees/**").hasRole("ADMIN")
                     // A member reads the trainers to choose one; only the administrator writes them.
                     .requestMatchers(HttpMethod.GET,   "/api/v1/trainers/**").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
                     .requestMatchers("/api/v1/trainers/**").hasRole("ADMIN")
+                    // membership. Everyone reads the catalog to compare plans before
+                    // contracting; only the administrator maintains it.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/membership-plans").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/membership-plans/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers("/api/v1/membership-plans/**").hasRole("ADMIN")
+                    // Reactivation is manual and staff-only: "el administrador o el
+                    // recepcionista deben poder reactivarla". Everything else under
+                    // /memberships/* the member may request for their own contract.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/memberships").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/memberships").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/memberships/*/reactivations").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers("/api/v1/memberships/**").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->
