@@ -52,7 +52,6 @@ jobs:
           REPO_PATH:   ${{ secrets.REPO_PATH }}
           DB_USER:     ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          VERSION:     ${{ github.run_number }}
         run: |
           # compose.yaml carries a dev default for the DB password so a fresh
           # clone just works. Production must never fall back to it.
@@ -71,11 +70,10 @@ jobs:
               echo 'POSTGRES_DB=fitness_db'
               echo 'POSTGRES_USER=$DB_USER'
               echo 'POSTGRES_PASSWORD=$DB_PASSWORD'
-              echo 'VERSION=$VERSION'
             } > .env
 
-            docker compose --profile prod pull
-            docker compose --profile prod up -d --wait
+            docker compose pull
+            docker compose up -d --wait
           "
           echo "Deployment completed"
 
