@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nCuatro endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/enrollments` | `classes` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
+    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nCuatro endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/enrollments` | `classes` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -200,6 +200,42 @@
       "value": "",
       "type": "string",
       "description": "Vencimiento del contrato, para comprobar el recalculo al reactivar."
+    },
+    {
+      "key": "access_membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Membresía para el módulo access. La guarda 'Contratar membresía para el acceso'."
+    },
+    {
+      "key": "facility_visit_id",
+      "value": "",
+      "type": "string",
+      "description": "Visita registrada (check-in). La guarda 'Check-in del socio'."
+    },
+    {
+      "key": "guest_pass_id",
+      "value": "",
+      "type": "string",
+      "description": "Pase de invitado. Lo guarda 'Pase de dia de prueba'."
+    },
+    {
+      "key": "guest_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del pase de invitado. Lo guarda 'Pase de dia de prueba'."
+    },
+    {
+      "key": "guest_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del invitado, generado por corrida."
+    },
+    {
+      "key": "guest_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del invitado, generado por corrida."
     }
   ],
   "item": [
@@ -3325,6 +3361,707 @@
                   "",
                   "pm.test(\"error_code MEMBERSHIP_CANCELLED\", function () {",
                   "    pm.expect(body.error_code).to.eql(\"MEMBERSHIP_CANCELLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Access",
+      "description": "Check-in/check-out y pases de invitado (§3.5)",
+      "item": [
+        {
+          "name": "Contratar membresia para el acceso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"member_id\": {{member_id}}, \"plan_id\": 1}"
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"access_membership_id\", body.membership_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check-in del socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"member_id\": {{member_id}}}"
+            },
+            "url": {
+              "raw": "{{base_url}}/visits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"facility_visit_id\", body.facility_visit_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check-in repetido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"member_id\": {{member_id}}}"
+            },
+            "url": {
+              "raw": "{{base_url}}/visits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 VISIT_ALREADY_OPEN\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.equal(\"VISIT_ALREADY_OPEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Quien esta dentro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/visits?open=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ],
+              "query": [
+                {
+                  "key": "open",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const visitId = pm.collectionVariables.get(\"facility_visit_id\");",
+                  "",
+                  "pm.test(\"La visita aparece en la lista\", function () {",
+                  "    const ids = body.content.map(function (v) { return v.facility_visit_id; });",
+                  "    pm.expect(ids).to.include(parseInt(visitId));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check-out",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/visits/{{facility_visit_id}}/check-out",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "{{facility_visit_id}}",
+                "check-out"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"checked_out_at no es nulo\", function () {",
+                  "    pm.expect(body.checked_out_at).to.be.not.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check-out repetido",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/visits/{{facility_visit_id}}/check-out",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits",
+                "{{facility_visit_id}}",
+                "check-out"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 INVALID_STATE_TRANSITION\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.equal(\"INVALID_STATE_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Historial de asistencia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/visits?member_id={{member_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ],
+              "query": [
+                {
+                  "key": "member_id",
+                  "value": "{{member_id}}"
+                },
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Congelar para probar el bloqueo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\": \"TRAVEL\", \"notes\": \"Test congelamiento\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships/{{access_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{access_membership_id}}",
+                "freezes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check-in con membresia congelada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"member_id\": {{member_id}}}"
+            },
+            "url": {
+              "raw": "{{base_url}}/visits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 MEMBERSHIP_FROZEN\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error_code).to.equal(\"MEMBERSHIP_FROZEN\");",
+                  "    pm.expect(body.suggested_action).to.equal(\"REACTIVATE_MEMBERSHIP\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reactivar la membresia",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{access_membership_id}}/reactivations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{access_membership_id}}",
+                "reactivations"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Pase de dia de prueba",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"person\": {\"document_type\": \"PASSPORT\", \"document_number\": \"{{guest_document}}\", \"first_name\": \"Guest\", \"last_name\": \"User\", \"email\": \"{{guest_email}}\", \"phone\": \"12345678\"}, \"pass_type\": \"FREE_TRIAL\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"guest_document\", String(Date.now()).slice(-11));",
+                  "pm.collectionVariables.set(\"guest_email\", \"guest\" + Date.now() + \"@test.com\");",
+                  "pm.collectionVariables.set(\"guest_person_id\", pm.response.json().person.person_id);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"guest_pass_id\", body.guest_pass_id);",
+                  "pm.collectionVariables.set(\"guest_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Segundo pase gratuito",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"person\": {\"document_type\": \"PASSPORT\", \"document_number\": \"{{guest_document}}\", \"first_name\": \"Guest\", \"last_name\": \"User\", \"email\": \"another@test.com\", \"phone\": \"87654321\"}, \"pass_type\": \"FREE_TRIAL\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 GUEST_PASS_LIMIT_REACHED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error_code).to.equal(\"GUEST_PASS_LIMIT_REACHED\");",
+                  "    pm.expect(body.suggested_action).to.equal(\"OFFER_MEMBERSHIP\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Pase pagado el mismo dia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"person\": {\"document_type\": \"PASSPORT\", \"document_number\": \"{{guest_document}}\", \"first_name\": \"Guest\", \"last_name\": \"User\", \"email\": \"paid@test.com\", \"phone\": \"11111111\"}, \"pass_type\": \"PAID_DAY_PASS\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Es un pase pagado\", function () {",
+                  "    pm.expect(body.pass_type).to.equal(\"PAID_DAY_PASS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Invitado sin anfitrion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"person\": {\"document_type\": \"PASSPORT\", \"document_number\": \"TEST001\", \"first_name\": \"NoHost\", \"last_name\": \"Guest\", \"email\": \"nohost@test.com\", \"phone\": \"99999999\"}, \"pass_type\": \"MEMBER_GUEST\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VALIDATION_ERROR\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.equal(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Invitado de un socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"person\": {\"document_type\": \"PASSPORT\", \"document_number\": \"WITHHOST01\", \"first_name\": \"With\", \"last_name\": \"Host\", \"email\": \"withhost@test.com\", \"phone\": \"55555555\"}, \"pass_type\": \"MEMBER_GUEST\", \"host_member_id\": {{member_id}}}"
+            },
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de pases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/guest-passes?pass_type=FREE_TRIAL",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "guest-passes"
+              ],
+              "query": [
+                {
+                  "key": "pass_type",
+                  "value": "FREE_TRIAL"
+                },
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de visitas sin token",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/visits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "visits"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 UNAUTHENTICATED\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.equal(\"UNAUTHENTICATED\");",
                   "});"
                 ]
               }

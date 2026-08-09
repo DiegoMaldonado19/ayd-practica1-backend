@@ -81,6 +81,7 @@ public enum ErrorCode
     EMPLOYEE_NOT_FOUND            (HttpStatus.NOT_FOUND,           null,                      "El empleado no existe."),
     TRAINER_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "El entrenador no existe."),
     VERIFICATION_CODE_NOT_FOUND   (HttpStatus.NOT_FOUND,           null,                      "El código de verificación no existe."),
+    VISIT_NOT_FOUND               (HttpStatus.NOT_FOUND,           null,                      "La visita no existe."),
 
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),

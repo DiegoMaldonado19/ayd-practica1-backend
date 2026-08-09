@@ -16,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The member file: the alta of §3.2 #2 and the maintenance around it.
@@ -57,6 +60,19 @@ public class MemberService
         assertOwnFile(principal, member);
 
         return MemberResponse.from(member);
+    }
+
+    /** Resolves member names in bulk: one query for a whole page instead of N. */
+    @Transactional(readOnly = true)
+    public Map<Long, String> findNames(Collection<Long> memberIds)
+    {
+        if (memberIds.isEmpty())
+        {
+            return Map.of();
+        }
+
+        return memberRepository.findAllById(memberIds).stream()
+                .collect(Collectors.toMap(Member::getMemberId, m -> m.getPerson().getFullName()));
     }
 
     public MemberResponse create(MemberRequest request)
