@@ -76,6 +76,8 @@ public enum ErrorCode
     USER_NOT_FOUND                (HttpStatus.NOT_FOUND,           null,                      "La cuenta no existe."),
     PERSON_NOT_FOUND              (HttpStatus.NOT_FOUND,           null,                      "La persona no existe."),
     MEMBER_NOT_FOUND              (HttpStatus.NOT_FOUND,           null,                      "El socio no existe."),
+    MEMBERSHIP_NOT_FOUND          (HttpStatus.NOT_FOUND,           null,                      "La membresía no existe."),
+    MEMBERSHIP_PLAN_NOT_FOUND     (HttpStatus.NOT_FOUND,           null,                      "El plan de membresía no existe."),
     EMPLOYEE_NOT_FOUND            (HttpStatus.NOT_FOUND,           null,                      "El empleado no existe."),
     TRAINER_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "El entrenador no existe."),
     VERIFICATION_CODE_NOT_FOUND   (HttpStatus.NOT_FOUND,           null,                      "El código de verificación no existe."),

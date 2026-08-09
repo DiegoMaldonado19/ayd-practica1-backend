@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * The member file: the alta of §3.2 #2 and the maintenance around it.
@@ -33,10 +34,18 @@ public class MemberService
     private final PersonService    personService;
     private final UserService      userService;
 
+    /**
+     * memberIds null means no membership filter was asked for; an empty list means one
+     * was and nobody matched. Both are normalized to a sentinel because JPQL cannot
+     * bind a null list into an IN, and no member has id 0.
+     */
     @Transactional(readOnly = true)
-    public Page<MemberResponse> search(MemberStatus status, String search, Pageable pageable)
+    public Page<MemberResponse> search(MemberStatus status, List<Long> memberIds, String search, Pageable pageable)
     {
-        return memberRepository.search(status, search == null ? "" : search, pageable)
+        var filterByMembership = memberIds != null;
+        var ids                = memberIds == null || memberIds.isEmpty() ? List.of(0L) : memberIds;
+
+        return memberRepository.search(status, filterByMembership, ids, search == null ? "" : search, pageable)
                 .map(MemberResponse::from);
     }
 

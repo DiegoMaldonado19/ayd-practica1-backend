@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 14 | `03-API-REST §3.2` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nCuatro endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/enrollments` | `classes` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
+    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nCuatro endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/enrollments` | `classes` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -146,6 +146,60 @@
       "value": "Socio123*",
       "type": "string",
       "description": "Contraseña con la que nace la cuenta del socio."
+    },
+    {
+      "key": "membership_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan de menor tier del catalogo. Lo guarda Membership Plans > Catalogo de planes."
+    },
+    {
+      "key": "plan_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo de ese plan (BASIC en la base sembrada)."
+    },
+    {
+      "key": "alt_membership_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan destino del cambio de plan. Lo guarda el mismo listado."
+    },
+    {
+      "key": "alt_plan_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo del plan destino (PREMIUM en la base sembrada)."
+    },
+    {
+      "key": "temp_plan_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo unico por corrida del plan de prueba: uq_plan_code."
+    },
+    {
+      "key": "temp_plan_tier",
+      "value": "",
+      "type": "string",
+      "description": "Tier unico por corrida del plan de prueba: uq_plan_tier."
+    },
+    {
+      "key": "temp_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan de prueba sobre el que trabajan actualizar y desactivar."
+    },
+    {
+      "key": "membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Contrato vigente del socio. Lo actualizan contratar, renovar y cambiar de plan."
+    },
+    {
+      "key": "membership_end_date",
+      "value": "",
+      "type": "string",
+      "description": "Vencimiento del contrato, para comprobar el recalculo al reactivar."
     }
   ],
   "item": [
@@ -2126,6 +2180,1151 @@
                   "pm.test(\"Responde 404 PERSON_NOT_FOUND\", function () {",
                   "    pm.response.to.have.status(404);",
                   "    pm.expect(pm.response.json().error_code).to.eql(\"PERSON_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Membership Plans",
+      "description": "Catálogo de planes del módulo `membership` (`03-API-REST §3.3`). El administrador lo mantiene; los demás roles solo lo leen para comparar planes antes de contratar.\n\nUn plan **nunca se borra**: `PATCH /membership-plans/{id}/status` lo desactiva y los contratos ya firmados lo siguen apuntando (`fk_membership_plan` es `ON DELETE RESTRICT`).",
+      "item": [
+        {
+          "name": "Catalogo de planes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/membership-plans?page=0&size=20&sort=tier,asc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Base 0."
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "Por defecto 20, máximo 100."
+                },
+                {
+                  "key": "sort",
+                  "value": "tier,asc",
+                  "description": "El tier ordena Basico, Premium y Elite."
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "true | false. Sin el filtro devuelve todo el catálogo.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista, entrenador y socio.** Catálogo con beneficios y precios.\n\nSe ordena por `tier` para que los tres planes sembrados (`BASIC`, `PREMIUM`, `ELITE`) encabecen la lista: el script guarda los dos primeros para el resto de la corrida.\n\n`weekly_class_limit` nulo con `includes_group_classes` en `true` significa **clases ilimitadas** (Plan Élite)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Devuelve la envoltura paginada con los planes sembrados\", function () {",
+                  "    pm.expect(body.content).to.be.an(\"array\");",
+                  "    pm.expect(body.page.total_elements).to.be.at.least(3);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"membership_plan_id\", body.content[0].membership_plan_id);",
+                  "pm.collectionVariables.set(\"plan_code\", body.content[0].code);",
+                  "pm.collectionVariables.set(\"alt_membership_plan_id\", body.content[1].membership_plan_id);",
+                  "pm.collectionVariables.set(\"alt_plan_code\", body.content[1].code);",
+                  "",
+                  "pm.test(\"El plan de mayor tier incluye mas beneficios\", function () {",
+                  "    pm.expect(body.content[0].tier).to.be.below(body.content[1].tier);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/membership-plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans"
+              ]
+            },
+            "description": "**Solo administrador.** Crea un plan nuevo.\n\n`code` y `tier` son únicos (`uq_plan_code`, `uq_plan_tier`), así que el script previo los genera por corrida. `tier` gobierna dos reglas a la vez: qué cambio de plan es *upgrade* y quién tiene prioridad en la lista de espera.\n\n`active` no se envía: nace activo y solo `PATCH .../status` lo cambia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{temp_plan_code}}\",\n  \"name\": \"Plan de prueba\",\n  \"description\": \"Plan creado por la coleccion de Postman.\",\n  \"billing_period\": \"QUARTERLY\",\n  \"price\": 900.0,\n  \"tier\": {{temp_plan_tier}},\n  \"includes_group_classes\": true,\n  \"weekly_class_limit\": 2,\n  \"includes_personal_trainer\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_plan_code y uq_plan_tier harian fallar la segunda corrida de la",
+                  "// coleccion sobre la misma base, igual que uq_person_document en Members.",
+                  "const sufijo = String(Date.now()).slice(-6);",
+                  "",
+                  "pm.collectionVariables.set(\"temp_plan_code\", \"TMP\" + sufijo);",
+                  "// SMALLINT y ck_plan_tier: positivo y por debajo de 32767.",
+                  "pm.collectionVariables.set(\"temp_plan_tier\", 100 + (Math.floor(Date.now() / 1000) % 30000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"temp_plan_id\", body.membership_plan_id);",
+                  "",
+                  "pm.test(\"Nace activo\", function () {",
+                  "    pm.expect(body.active).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear plan con limite invalido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/membership-plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans"
+              ]
+            },
+            "description": "**Solo administrador.** Un plan sin clases grupales no puede llevar límite semanal de clases: es la restricción `ck_plan_limit_ok` del esquema, validada en el servicio para que la respuesta sea un `400` legible y no una violación de constraint.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | `weekly_class_limit` con `includes_group_classes` en `false`. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{temp_plan_code}}X\",\n  \"name\": \"Plan incoherente\",\n  \"billing_period\": \"MONTHLY\",\n  \"price\": 100.0,\n  \"tier\": 32000,\n  \"includes_group_classes\": false,\n  \"weekly_class_limit\": 3,\n  \"includes_personal_trainer\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code VALIDATION_ERROR\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle del plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/membership-plans/{{membership_plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans",
+                "{{membership_plan_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Detalle de un plan del catálogo.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Trae los beneficios del plan\", function () {",
+                  "    pm.expect(body).to.have.property(\"includes_group_classes\");",
+                  "    pm.expect(body).to.have.property(\"includes_personal_trainer\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Actualizar plan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/membership-plans/{{temp_plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans",
+                "{{temp_plan_id}}"
+              ]
+            },
+            "description": "**Solo administrador.** Modifica nombre, precio, periodicidad y beneficios.\n\n`code` y `tier` no viajan en el cuerpo: identifican al plan y son únicos. El precio nuevo solo alcanza a los contratos firmados de aquí en adelante, porque `membership.paid_price` congeló los anteriores.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Plan de prueba renombrado\",\n  \"description\": \"Precio y beneficios modificados por la coleccion.\",\n  \"billing_period\": \"SEMIANNUAL\",\n  \"price\": 1500.5,\n  \"includes_group_classes\": true,\n  \"weekly_class_limit\": 5,\n  \"includes_personal_trainer\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Aplica el precio y los beneficios nuevos\", function () {",
+                  "    pm.expect(Number(body.price)).to.eql(1500.5);",
+                  "    pm.expect(body.billing_period).to.eql(\"SEMIANNUAL\");",
+                  "    pm.expect(body.includes_personal_trainer).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Desactivar plan",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/membership-plans/{{temp_plan_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans",
+                "{{temp_plan_id}}",
+                "status"
+              ]
+            },
+            "description": "**Solo administrador.** Activa o desactiva el plan sin borrarlo. Desactivarlo solo lo cierra a contratos nuevos: los que ya están vigentes siguen corriendo hasta vencer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda desactivado sin borrarse\", function () {",
+                  "    pm.expect(body.active).to.eql(false);",
+                  "    pm.expect(body.membership_plan_id).to.not.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Memberships",
+      "description": "Ciclo de vida del contrato (`03-API-REST §3.3`): contratación, congelamiento con recálculo de vencimiento, renovación, cambio de plan y cancelación.\n\n**Los cuatro estados del enunciado y sus transiciones:**\n\n| Desde | A | Cómo |\n|---|---|---|\n| — | `ACTIVE` | `POST /memberships` |\n| `ACTIVE` | `FROZEN` | `POST /memberships/{id}/freezes` |\n| `FROZEN` | `ACTIVE` | `POST /memberships/{id}/reactivations` |\n| `ACTIVE` | `EXPIRED` | tarea programada diaria a las 00:05 |\n| `ACTIVE` · `EXPIRED` | contrato nuevo | `renewals` · `plan-changes` |\n| `ACTIVE` · `FROZEN` · `EXPIRED` | `CANCELLED` | `cancellations` (definitivo) |\n\nLos cambios de estado con datos propios son sub-recursos `POST`, nunca verbos en la URI.\n\n**Usa el `member_id` que dejó la carpeta Members**, así que la colección se ejecuta de arriba abajo.",
+      "item": [
+        {
+          "name": "Contratar membresia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Contrata una membresía para un socio.\n\nNo se envían ni el precio ni la fecha de vencimiento: `paid_price` es el precio vigente del plan —lo que congela lo pactado frente a cambios de tarifa posteriores— y `end_date` sale del período del plan. `start_date` vacío significa hoy.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato vigente. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{member_id}},\n  \"membership_plan_id\": {{membership_plan_id}},\n  \"notes\": \"Contratacion desde la coleccion de Postman.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"membership_id\", body.membership_id);",
+                  "pm.collectionVariables.set(\"membership_end_date\", body.end_date);",
+                  "",
+                  "pm.test(\"Nace activa y con el precio vigente del plan\", function () {",
+                  "    pm.expect(body.status).to.eql(\"ACTIVE\");",
+                  "    pm.expect(body.paid_price).to.not.eql(null);",
+                  "    pm.expect(body.days_remaining).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar con contrato vigente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Un socio no puede tener dos contratos en vigor a la vez: es el índice parcial `uq_membership_in_force`, y el servicio lo responde con un código de negocio en lugar de una violación de restricción.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato `ACTIVE` o `FROZEN`. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{member_id}},\n  \"membership_plan_id\": {{membership_plan_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code MEMBERSHIP_ALREADY_ACTIVE\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"MEMBERSHIP_ALREADY_ACTIVE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de membresias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Base 0."
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "Por defecto 20, máximo 100."
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "description": "ACTIVE | FROZEN | EXPIRED | CANCELLED",
+                  "disabled": true
+                },
+                {
+                  "key": "plan_id",
+                  "value": "1",
+                  "description": "Contratos de un plan concreto.",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "endDate,asc",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Listado paginado. El socio no lista contratos ajenos: para el suyo usa **Historial del socio** o el detalle.\n\nFiltros: `status`, `plan_id`, `expiring_in_days`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Devuelve la envoltura paginada\", function () {",
+                  "    pm.expect(body.content).to.be.an(\"array\");",
+                  "    pm.expect(body.page.total_elements).to.be.at.least(1);",
+                  "});",
+                  "",
+                  "pm.test(\"Cada contrato trae su plan con beneficios\", function () {",
+                  "    pm.expect(body.content[0].plan.membership_plan_id).to.not.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Proximas a vencer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships?expiring_in_days=60&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ],
+              "query": [
+                {
+                  "key": "expiring_in_days",
+                  "value": "60",
+                  "description": "Vence dentro de N dias. El aviso documentado son 5 dias."
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador y recepcionista.** La consulta rápida del recepcionista: *\"estado de membresía de un socio (activa, congelada, vencida o **próxima a vencer**)\"*.\n\n\"Próxima a vencer\" es un **estado derivado**, nunca almacenado: es `status = 'ACTIVE'` con `end_date` dentro de los próximos `expiring_in_days`. Por eso el filtro asume `ACTIVE` si no se manda un `status` explícito."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Solo trae contratos vigentes\", function () {",
+                  "    body.content.forEach(function (contrato) {",
+                  "        pm.expect(contrato.status).to.eql(\"ACTIVE\");",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle del contrato",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Detalle del contrato, con beneficios y días restantes.\n\nEl socio solo alcanza los suyos: esa regla vive en el servicio y no en un *matcher* de rutas, porque un patrón ve la ruta pero no la fila que hay detrás.\n\n`days_remaining` es derivado y jamás se almacena.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_NOT_FOUND` | 404 | El contrato no existe. |\n| `FORBIDDEN_RESOURCE` | 403 | Un socio pidió un contrato ajeno. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Trae el plan contratado y los dias restantes\", function () {",
+                  "    pm.expect(body.plan).to.have.property(\"includes_group_classes\");",
+                  "    pm.expect(body).to.have.property(\"days_remaining\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Congelar membresia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "freezes"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Congela la membresía *\"indicando un motivo y, opcionalmente, una fecha estimada de reactivación\"*.\n\nEs un sub-recurso `POST` y no un `PATCH .../status` porque el congelamiento es un hecho de negocio con datos propios: crea una fila real en `membership_freeze`.\n\n**No se descuenta tiempo de vigencia del plan:** `end_date` no se toca aquí. Lo que la corre es la reactivación.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `FREEZE_LIMIT_REACHED` | 409 | Superó los días o las veces del ciclo (`gym.freeze.*`: 15 días y 2 veces por 90 días). |\n| `MEMBERSHIP_FROZEN` · `MEMBERSHIP_EXPIRED` · `MEMBERSHIP_CANCELLED` | 409 | El contrato no está activo. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"TRAVEL\",\n  \"reason_detail\": \"Viaje de trabajo registrado desde Postman.\",\n  \"expected_end_date\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda un congelamiento en curso\", function () {",
+                  "    pm.expect(body.in_progress).to.eql(true);",
+                  "    pm.expect(body.reactivated_on).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Congelar de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "freezes"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** La máquina de estados no admite congelar lo que ya está congelado, y responde con el código exacto del estado en lugar de uno genérico, para que la interfaz ofrezca el botón correcto (`suggested_action: REACTIVATE_MEMBERSHIP`).\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_FROZEN` | 409 | El contrato ya está congelado. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"INJURY\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code MEMBERSHIP_FROZEN\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"MEMBERSHIP_FROZEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Congelamientos del contrato",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "freezes"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Congelamientos del contrato **y días acumulados en el ciclo**.\n\nNo va paginado como el resto de las colecciones porque los contadores son la mitad de la respuesta: la interfaz necesita los topes vigentes para avisarle al socio cuánto le queda antes de `FREEZE_LIMIT_REACHED`.\n\nLos días congelados **no se almacenan**: son `reactivated_on - start_date`. El congelamiento está en curso mientras `reactivated_on` sea nulo, así que tampoco hay columna de estado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Trae la lista y los contadores del ciclo\", function () {",
+                  "    pm.expect(body.freezes).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(body.freezes_used_in_cycle).to.be.at.least(1);",
+                  "    pm.expect(body.max_days_per_cycle).to.eql(15);",
+                  "    pm.expect(body.max_count_per_cycle).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reactivar membresia",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/reactivations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "reactivations"
+              ]
+            },
+            "description": "**Solo administrador y recepcionista.** *\"El administrador o el recepcionista deben poder reactivarla manualmente cuando el socio lo solicite\"*, por eso el socio no aparece en esta fila.\n\nNo lleva cuerpo: lo que recalcula el vencimiento es la fecha real de hoy. *\"Al reactivarse, la nueva fecha de vencimiento se recalcula sumando el tiempo que permaneció congelada\"*.\n\nEn esta corrida el congelamiento duró cero días, así que `end_date` queda igual: la suma se nota cuando pasan días entre congelar y reactivar.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `FREEZE_NOT_IN_PROGRESS` | 409 | La membresía no está congelada. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const antes = pm.collectionVariables.get(\"membership_end_date\");",
+                  "",
+                  "pm.test(\"Vuelve a estar activa\", function () {",
+                  "    pm.expect(body.status).to.eql(\"ACTIVE\");",
+                  "});",
+                  "",
+                  "pm.test(\"El vencimiento nunca retrocede\", function () {",
+                  "    pm.expect(new Date(body.end_date) >= new Date(antes)).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"membership_end_date\", body.end_date);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Renovar membresia",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/renewals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "renewals"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** *\"Solicitar la renovación de su membresía\"*.\n\nRenovar **crea el contrato siguiente encadenado al actual**: el nuevo arranca donde terminaba el anterior, así que no se pierde ni un día, y el anterior pasa a `EXPIRED` porque `uq_membership_in_force` no admite dos contratos en vigor.\n\nNo lleva cuerpo: se renueva el mismo plan. Para cambiarlo está `plan-changes`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El contrato está congelado o cancelado. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con el contrato nuevo\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const anterior = pm.collectionVariables.get(\"membership_id\");",
+                  "",
+                  "pm.test(\"Es un contrato distinto, encadenado al anterior\", function () {",
+                  "    pm.expect(String(body.membership_id)).to.not.eql(String(anterior));",
+                  "    pm.expect(body.status).to.eql(\"ACTIVE\");",
+                  "    pm.expect(body.start_date).to.eql(pm.collectionVariables.get(\"membership_end_date\"));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"membership_id\", body.membership_id);",
+                  "pm.collectionVariables.set(\"membership_end_date\", body.end_date);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cambio de plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/plan-changes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "plan-changes"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** *\"Solicitar el cambio de su membresía\"*. Que sea *upgrade* o *downgrade* lo decide el `tier` de ambos planes, así que no se declara.\n\nComo la renovación, crea directamente el contrato nuevo y retira el anterior. Arranca hoy con el período completo del plan destino: **no hay prorrateo**.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan destino no existe. |\n| `VALIDATION_ERROR` | 400 | El plan destino está desactivado, o ya es el contratado. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"membership_plan_id\": {{alt_membership_plan_id}},\n  \"notes\": \"Upgrade solicitado desde la coleccion.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con el contrato nuevo\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda contratado el plan destino\", function () {",
+                  "    pm.expect(String(body.plan.membership_plan_id))",
+                  "        .to.eql(String(pm.collectionVariables.get(\"alt_membership_plan_id\")));",
+                  "    pm.expect(body.status).to.eql(\"ACTIVE\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"membership_id\", body.membership_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Historial del socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members/{{member_id}}/memberships?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{member_id}}",
+                "memberships"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Historial de contratos del socio (`03-API-REST §3.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `membership`: la matriz de dependencias de `02-Modulos §3` dice que `directory` **no** usa `membership`, solo al revés, así que el *handler* vive en el módulo dueño de los datos.\n\nDespués de contratar, renovar y cambiar de plan deben verse tres contratos: el vigente y dos `EXPIRED`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Acumula el historial de contratos\", function () {",
+                  "    pm.expect(body.page.total_elements).to.be.at.least(3);",
+                  "});",
+                  "",
+                  "pm.test(\"Solo uno esta en vigor\", function () {",
+                  "    const vigentes = body.content.filter(function (c) {",
+                  "        return c.status === \"ACTIVE\" || c.status === \"FROZEN\";",
+                  "    });",
+                  "    pm.expect(vigentes.length).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Filtrar socios por plan y estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members?plan_code={{alt_plan_code}}&membership_status=ACTIVE&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "plan_code",
+                  "value": "{{alt_plan_code}}",
+                  "description": "Codigo del plan del contrato vigente."
+                },
+                {
+                  "key": "membership_status",
+                  "value": "ACTIVE",
+                  "description": "ACTIVE | FROZEN | EXPIRED | CANCELLED"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y entrenador.** Los filtros `plan_code` y `membership_status` de `03-API-REST §3.2`, que solo pudieron implementarse al existir `membership`.\n\nFiltran sobre el contrato **vigente** de cada socio, no sobre cualquiera de su historial: sin eso, pedir `EXPIRED` devolvería también a quien ya renovó."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const socio = pm.collectionVariables.get(\"member_id\");",
+                  "",
+                  "pm.test(\"El socio del cambio de plan aparece en el filtro\", function () {",
+                  "    const ids = body.content.map(function (m) { return String(m.member_id); });",
+                  "    pm.expect(ids).to.include(String(socio));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Filtro que no debe traer al socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members?plan_code=ELITE&membership_status=ACTIVE&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "plan_code",
+                  "value": "ELITE",
+                  "description": "Plan que nadie contrata en la coleccion."
+                },
+                {
+                  "key": "membership_status",
+                  "value": "ACTIVE"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y entrenador.** El control negativo del filtro anterior: nadie contrata el Plan Élite en esta colección, así que el socio de la corrida **no** debe aparecer.\n\nSin esta petición la anterior pasaría igual aunque el filtro se ignorara por completo y devolviera todos los socios."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "const socio = pm.collectionVariables.get(\"member_id\");",
+                  "",
+                  "pm.test(\"El filtro descarta al socio\", function () {",
+                  "    const ids = body.content.map(function (m) { return String(m.member_id); });",
+                  "    pm.expect(ids).to.not.include(String(socio));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancelar membresia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/cancellations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "cancellations"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** *\"A diferencia de vencida, este estado es definitivo y debe quedar registrado junto con la fecha y, opcionalmente, un motivo de cancelación, útil para los reportes administrativos\"*.\n\nEl motivo es opcional; la fecha no: el servicio siempre la escribe, porque `ck_membership_cancel` exige que `CANCELLED` y `cancelled_on` concuerden en ambos sentidos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"COST\",\n  \"notes\": \"Cancelacion registrada desde la coleccion.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda cancelada, fechada y con motivo\", function () {",
+                  "    pm.expect(body.status).to.eql(\"CANCELLED\");",
+                  "    pm.expect(body.cancelled_on).to.not.eql(null);",
+                  "    pm.expect(body.cancellation_reason).to.eql(\"COST\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancelar de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{membership_id}}/cancellations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{membership_id}}",
+                "cancellations"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** `CANCELLED` es un estado **terminal**: el enunciado lo llama definitivo, así que no hay transición que salga de él.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_CANCELLED` | 409 | El contrato ya estaba cancelado. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"OTHER\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code MEMBERSHIP_CANCELLED\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"MEMBERSHIP_CANCELLED\");",
                   "});"
                 ]
               }

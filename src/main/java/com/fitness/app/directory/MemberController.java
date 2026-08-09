@@ -5,6 +5,8 @@ import com.fitness.app.directory.dto.MemberResponse;
 import com.fitness.app.directory.dto.MemberStatusRequest;
 import com.fitness.app.directory.model.MemberStatus;
 import com.fitness.app.iam.dto.AuthenticatedUser;
+import com.fitness.app.membership.MembershipService;
+import com.fitness.app.membership.model.MembershipStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -28,23 +30,40 @@ import java.net.URI;
  * whether a member may see this particular file is decided in MemberService,
  * because a path matcher cannot compare the caller with the row.
  *
- * The plan_code and membership_status filters of §3.2 #1 are missing on purpose:
- * they read the membership table, which belongs to a module that does not exist
- * yet.
+ * The history of contracts of §3.2 hangs from this path but is served by
+ * MemberMembershipController: those rows belong to membership, and the dependency
+ * matrix of 02-Modulos §3 only allows that direction.
  */
 @RestController
 @RequestMapping("/api/v1/members")
 @RequiredArgsConstructor
 public class MemberController
 {
-    private final MemberService memberService;
+    private final MemberService     memberService;
+    private final MembershipService membershipService;
 
+    /**
+     * plan_code and membership_status are resolved by membership and arrive here as
+     * member ids. Asking the other service from MemberService instead would close the
+     * loop that MembershipService already opens towards directory.
+     *
+     * Both are named by hand: the SNAKE_CASE strategy of application.yml renames JSON
+     * properties, not query parameters, so plan_code would silently arrive null.
+     */
     @GetMapping
-    public PagedModel<MemberResponse> list(@RequestParam(required = false) MemberStatus status,
-                                           @RequestParam(required = false) String       search,
-                                           Pageable                                     pageable)
+    public PagedModel<MemberResponse> list(@RequestParam(required = false)
+                                           MemberStatus     status,
+                                           @RequestParam(name = "plan_code", required = false)
+                                           String           planCode,
+                                           @RequestParam(name = "membership_status", required = false)
+                                           MembershipStatus membershipStatus,
+                                           @RequestParam(required = false)
+                                           String           search,
+                                           Pageable         pageable)
     {
-        return new PagedModel<>(memberService.search(status, search, pageable));
+        var memberIds = membershipService.findMemberIds(planCode, membershipStatus);
+
+        return new PagedModel<>(memberService.search(status, memberIds, search, pageable));
     }
 
     @PostMapping
