@@ -7,6 +7,8 @@ import com.fitness.app.directory.dto.TrainerSpecialtiesRequest;
 import com.fitness.app.directory.dto.UpdateTrainerRequest;
 import com.fitness.app.directory.model.Specialty;
 import com.fitness.app.directory.model.Trainer;
+import com.fitness.app.iam.UserService;
+import com.fitness.app.iam.dto.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TrainerService
 {
     private final TrainerRepository trainerRepository;
+    private final UserService       userService;
 
     @Transactional(readOnly = true)
     public Page<TrainerResponse> search(Specialty specialty, Pageable pageable)
@@ -62,6 +65,20 @@ public class TrainerService
         trainer.getSpecialties().addAll(request.specialties());
 
         return TrainerResponse.from(trainer);
+    }
+
+    /**
+     * The trainer profile of the signed-in user, for classes' "solo ve sus propias
+     * clases" scope check (03-API-REST §3.6/§3.7). TRAINER_NOT_FOUND doubles as the
+     * scope failure: a caller with no trainer profile has nothing of its own to see.
+     */
+    @Transactional(readOnly = true)
+    public Long findTrainerIdByUser(AuthenticatedUser principal)
+    {
+        var personId = userService.findById(principal.appUserId()).personId();
+
+        return trainerRepository.findTrainerIdByPersonId(personId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
     }
 
     private Trainer findOrFail(Long trainerId)

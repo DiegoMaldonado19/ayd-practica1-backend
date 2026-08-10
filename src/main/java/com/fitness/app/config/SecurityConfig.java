@@ -102,6 +102,33 @@ public class SecurityConfig
                     // access. Check-in, check-out and guest passes are front desk only.
                     .requestMatchers("/api/v1/visits/**").hasAnyRole("ADMIN", "RECEPTIONIST")
                     .requestMatchers("/api/v1/guest-passes/**").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    // classes. Catalog and billboard are readable by everyone with a
+                    // role; only the administrator writes the recurring definition.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/group-classes", "/api/v1/group-classes/*",
+                                                       "/api/v1/group-classes/*/sessions")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers("/api/v1/group-classes/**").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/class-sessions", "/api/v1/class-sessions/*")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/class-sessions/*").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/class-sessions/*/status").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/class-sessions/*/cancellations").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/class-sessions/*/enrollments")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/class-sessions/*/enrollments")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/class-sessions/*/attendances").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/class-sessions/*/waitlist-entries")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/class-sessions/*/waitlist-entries")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/class-sessions/*/ratings").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/class-sessions/*/ratings").hasRole("MEMBER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/enrollments/*", "/api/v1/waitlist-entries/*")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/waitlist-entries/*/confirmations").hasRole("MEMBER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/enrollments")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->

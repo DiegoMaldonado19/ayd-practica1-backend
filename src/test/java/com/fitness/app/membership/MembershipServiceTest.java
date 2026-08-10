@@ -1,5 +1,6 @@
 package com.fitness.app.membership;
 
+import com.fitness.app.classes.EnrollmentService;
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
 import com.fitness.app.config.GymProperties;
@@ -22,6 +23,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,10 +58,14 @@ class MembershipServiceTest
     @Mock private MembershipPlanService      membershipPlanService;
     @Mock private MemberService              memberService;
 
+    /** Freezing calls classes to cancel the member's future enrolments; nothing here asserts on it. */
+    @Mock private ObjectProvider<EnrollmentService> enrollmentServiceProvider;
+
     // The real limits of application.yml: 15 days and 2 freezes per 90-day cycle.
     @Spy private GymProperties gymProperties = new GymProperties(
             new GymProperties.Freeze(15, 2, 90),
-            new GymProperties.GuestPass(1));
+            new GymProperties.GuestPass(1),
+            new GymProperties.Classes(2, 60));
 
     @InjectMocks private MembershipService membershipService;
 

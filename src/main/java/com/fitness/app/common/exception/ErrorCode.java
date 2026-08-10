@@ -82,6 +82,10 @@ public enum ErrorCode
     TRAINER_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "El entrenador no existe."),
     VERIFICATION_CODE_NOT_FOUND   (HttpStatus.NOT_FOUND,           null,                      "El código de verificación no existe."),
     VISIT_NOT_FOUND               (HttpStatus.NOT_FOUND,           null,                      "La visita no existe."),
+    GROUP_CLASS_NOT_FOUND         (HttpStatus.NOT_FOUND,           null,                      "La clase grupal no existe."),
+    CLASS_SESSION_NOT_FOUND       (HttpStatus.NOT_FOUND,           null,                      "La sesión de clase no existe."),
+    ENROLLMENT_NOT_FOUND          (HttpStatus.NOT_FOUND,           null,                      "La inscripción no existe."),
+    WAITLIST_ENTRY_NOT_FOUND      (HttpStatus.NOT_FOUND,           null,                      "La entrada en la lista de espera no existe."),
 
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),

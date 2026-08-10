@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Optional;
+
 public interface TrainerRepository extends JpaRepository<Trainer, Long>
 {
     /**
@@ -22,4 +24,8 @@ public interface TrainerRepository extends JpaRepository<Trainer, Long>
             WHERE (:specialty IS NULL OR :specialty MEMBER OF t.specialties)
            """)
     Page<Trainer> search(Specialty specialty, Pageable pageable);
+
+    /** The trainer profile of the signed-in person, for classes' trainer-scope check. */
+    @Query("SELECT t.trainerId FROM Trainer t WHERE t.employee.person.personId = :personId")
+    Optional<Long> findTrainerIdByPersonId(Long personId);
 }

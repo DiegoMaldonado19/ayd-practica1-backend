@@ -1,5 +1,6 @@
 package com.fitness.app.membership;
 
+import com.fitness.app.classes.EnrollmentService;
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
 import com.fitness.app.config.GymProperties;
@@ -19,6 +20,7 @@ import com.fitness.app.membership.model.MembershipStatus;
 import com.fitness.app.membership.model.PlanBenefit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,8 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The contract and its life cycle: contratación, congelamiento con recálculo de
@@ -63,6 +68,16 @@ public class MembershipService
     private final MembershipPlanService      membershipPlanService;
     private final MemberService              memberService;
     private final GymProperties              gymProperties;
+
+    /**
+     * ObjectProvider and not a direct EnrollmentService field: classes.EnrollmentService
+     * injects MembershipService directly (it asks about benefits on every enrollment),
+     * so a direct reference here in both directions is a bean cycle Spring refuses to
+     * build. This is the second cycle of 02-Modulos §3, resolved with a direct call in
+     * the documented direction - membership calls classes, never the other way in this
+     * flow - just deferred until the bean graph is up.
+     */
+    private final ObjectProvider<EnrollmentService> enrollmentServiceProvider;
 
     // -- The contract that the other modules consume (02-Modulos §2.3) ------------
 
@@ -109,6 +124,24 @@ public class MembershipService
 
         return membershipRepository.findMemberIdsByCurrentMembership(planCode == null ? "" : planCode,
                                                                      membershipStatus);
+    }
+
+    /**
+     * The plan tier of each member's contract in force, in one query. classes uses it
+     * to order a waitlist by priority (Elite before Premium) without mapping
+     * membership's entities - a member with no contract in force is simply absent from
+     * the map and never promoted.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Short> findActiveTiers(Collection<Long> memberIds)
+    {
+        if (memberIds.isEmpty())
+        {
+            return Map.of();
+        }
+
+        return membershipRepository.findInForceByMemberIdIn(memberIds, IN_FORCE).stream()
+                .collect(Collectors.toMap(Membership::getMemberId, m -> m.getPlan().getTier()));
     }
 
     // -- Contracts ----------------------------------------------------------------
@@ -271,9 +304,9 @@ public class MembershipService
      * estado no se descuenta tiempo de vigencia del plan". What extends it is the real
      * reactivation date.
      *
-     * ponytail: freezing should also cancel the member's future class enrollments
-     * (02-Modulos §3), but that is classes.cancelFutureEnrollments and the module does
-     * not exist yet.
+     * "Durante este estado [...] el socio no puede [...] inscribirse a clases [...]
+     * hasta que reactive su membresía" (Enunciado): freezing also cancels the member's
+     * future class enrollments, calling classes in the direction 02-Modulos §3 fixes.
      */
     public MembershipFreezeResponse freeze(Long membershipId, FreezeRequest request, AuthenticatedUser principal)
     {
@@ -304,6 +337,8 @@ public class MembershipService
         freeze.setAuthorizedByUserId(principal.appUserId());
 
         membership.setStatus(MembershipStatus.FROZEN);
+
+        cancelFutureEnrollments(membership.getMemberId());
 
         return MembershipFreezeResponse.from(membershipFreezeRepository.save(freeze), today);
     }
@@ -349,14 +384,27 @@ public class MembershipService
     @Scheduled(cron = "0 5 0 * * *")
     public void expireMemberships()
     {
-        var expired = membershipRepository.expireDueContracts(LocalDate.now(),
-                                                              MembershipStatus.ACTIVE,
-                                                              MembershipStatus.EXPIRED);
+        var today        = LocalDate.now();
+        var dueMemberIds = membershipRepository.findMemberIdsDueToExpire(today, MembershipStatus.ACTIVE);
+        var expired      = membershipRepository.expireDueContracts(today, MembershipStatus.ACTIVE, MembershipStatus.EXPIRED);
+
+        dueMemberIds.forEach(this::cancelFutureEnrollments);
 
         log.info("Membresías vencidas: {}", expired);
     }
 
     // -- Helpers ------------------------------------------------------------------
+
+    /**
+     * "El sistema debe [...] cancelar las inscripciones futuras" - the direct call of
+     * 02-Modulos §3, ciclo #2: membership calls classes, and classes never calls back
+     * in this flow. ObjectProvider defers the lookup past bean construction, which is
+     * what breaks the cycle (see the field's Javadoc above).
+     */
+    private void cancelFutureEnrollments(Long memberId)
+    {
+        enrollmentServiceProvider.ifAvailable(enrollmentService -> enrollmentService.cancelFutureEnrollments(memberId));
+    }
 
     /**
      * The most recent contract: applies assertInForceAndActive to check if it is ACTIVE

@@ -8,10 +8,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface MemberRepository extends JpaRepository<Member, Long>
 {
     boolean existsByPerson_PersonId(Long personId);
+
+    /** The member file of a signed-in person, for classes' "which member is the caller" ratings check. */
+    Optional<Member> findByPerson_PersonId(Long personId);
 
     /**
      * One query with nullable filters instead of a Specification and its helper
