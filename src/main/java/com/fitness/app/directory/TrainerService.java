@@ -9,11 +9,15 @@ import com.fitness.app.directory.model.Specialty;
 import com.fitness.app.directory.model.Trainer;
 import com.fitness.app.iam.UserService;
 import com.fitness.app.iam.dto.AuthenticatedUser;
+import com.fitness.app.training.TrainerAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The trainer profile: the load cap, the bio and the specialties.
@@ -27,19 +31,34 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class TrainerService
 {
-    private final TrainerRepository trainerRepository;
-    private final UserService       userService;
+    private final TrainerRepository              trainerRepository;
+    private final UserService                    userService;
+    private final TrainerAssignmentRepository    trainerAssignmentRepository;
 
     @Transactional(readOnly = true)
-    public Page<TrainerResponse> search(Specialty specialty, Pageable pageable)
+    public Page<TrainerResponse> search(Specialty specialty, Boolean hasCapacity, Pageable pageable)
     {
-        return trainerRepository.search(specialty, pageable).map(TrainerResponse::from);
+        var trainers = trainerRepository.search(specialty, pageable);
+
+        var caseload = trainerAssignmentRepository.caseloadByTrainer().stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        return trainers.map(trainer -> {
+            long assigned = caseload.getOrDefault(trainer.getTrainerId(), 0L);
+            return TrainerResponse.from(trainer, assigned);
+        });
     }
 
     @Transactional(readOnly = true)
     public TrainerResponse findById(Long trainerId)
     {
-        return TrainerResponse.from(findOrFail(trainerId));
+        var trainer = findOrFail(trainerId);
+        var caseload = buildCaseloadMap();
+        long assigned = caseload.getOrDefault(trainerId, 0L);
+        return TrainerResponse.from(trainer, assigned);
     }
 
     public TrainerResponse updateProfile(Long trainerId, UpdateTrainerRequest request)
@@ -49,7 +68,9 @@ public class TrainerService
         trainer.setMaxMemberLoad(request.maxMemberLoad());
         trainer.setBio(request.bio());
 
-        return TrainerResponse.from(trainer);
+        var caseload = buildCaseloadMap();
+        long assigned = caseload.getOrDefault(trainerId, 0L);
+        return TrainerResponse.from(trainer, assigned);
     }
 
     /**
@@ -64,7 +85,9 @@ public class TrainerService
         trainer.getSpecialties().clear();
         trainer.getSpecialties().addAll(request.specialties());
 
-        return TrainerResponse.from(trainer);
+        var caseload = buildCaseloadMap();
+        long assigned = caseload.getOrDefault(trainerId, 0L);
+        return TrainerResponse.from(trainer, assigned);
     }
 
     /**
@@ -96,7 +119,9 @@ public class TrainerService
             throw new BusinessException(ErrorCode.TRANSFER_TARGET_INVALID);
         }
 
-        return TrainerResponse.from(trainer);
+        var caseload = buildCaseloadMap();
+        long assigned = caseload.getOrDefault(trainerId, 0L);
+        return TrainerResponse.from(trainer, assigned);
     }
 
     /** The same profile, plus the two checks a caseload transfer adds on top. */
@@ -117,5 +142,14 @@ public class TrainerService
     {
         return trainerRepository.findById(trainerId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
+    }
+
+    private Map<Long, Long> buildCaseloadMap()
+    {
+        return trainerAssignmentRepository.caseloadByTrainer().stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
     }
 }

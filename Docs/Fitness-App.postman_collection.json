@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 18 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n| **Classes** | `classes` | 23 | `03-API-REST §3.6` |\n| **Notifications** | `notification` | 2 | `03-API-REST §3.9` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nLos endpoints de `03-API-REST §3.2` ya están completos. Siguen faltando tres filtros y un dato\nderivado: `plan_code` y `membership_status` en `GET /members`, `has_capacity` en `GET /trainers`, y la\ncarga actual en `GET /trainers/{id}`. Todos se calculan sobre `membership` o `trainer_assignment`, y\n`directory` no consulta las tablas de otro módulo.\n\nDe `notification` se cablean ocho de los diez tipos. `TRAINER_ALERT` y `PAYMENT_CONFIRMED` pertenecen a\n`training` y `billing`, que no existen: el enum los declara para espejar `ck_notification_type`, pero\nnadie los emite todavía.\n\nLas dos tareas programadas —`MEMBERSHIP_EXPIRING` a las 07:00 y `MEMBERSHIP_EXPIRED` a las 00:05— no\ntienen endpoint que las dispare, así que **no se pueden probar desde la colección**. Para verlas hay\nque contratar una membresía que venza dentro de `gym.membership.expiry-notice-days` y esperar al\ncron, o adelantar su expresión en `application.yml`.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
+    "description": "# Sistema de Gesti\u00f3n de Gimnasio\n\nColecci\u00f3n \u00fanica del backend. Una carpeta por m\u00f3dulo implementado; cada m\u00f3dulo nuevo agrega la suya.\n\n| Carpeta | M\u00f3dulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** \u00b7 **Users** | `iam` | 12 | `03-API-REST \u00a73.1` |\n| **Members** \u00b7 **Employees** \u00b7 **Trainers** | `directory` | 18 | `03-API-REST \u00a73.2` |\n| **Membership Plans** \u00b7 **Memberships** | `membership` | 14 | `03-API-REST \u00a73.3` |\n| **Visits** \u00b7 **Guest Passes** | `access` | 5 | `03-API-REST \u00a73.5` |\n| **Classes** | `classes` | 23 | `03-API-REST \u00a73.6` |\n| **Notifications** | `notification` | 2 | `03-API-REST \u00a73.9` |\n| **Reports** | `report` | 9 | `03-API-REST \u00a73.10` |\n\nBase: `http://localhost:8080/api/v1` \u00b7 Formato: JSON en `snake_case` \u00b7 Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## C\u00f3mo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth \u203a Login**. El script guarda `access_token` autom\u00e1ticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon p\u00fablicas: c\u00e1mbialas en el servidor con **Users \u203a Cambiar contrase\u00f1a propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users \u203a Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dej\u00f3 Members. Ejecutar la colecci\u00f3n completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta \u2014el invitado del pase de prueba es una persona sin\ncredenciales\u2014 y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que adem\u00e1s es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos c\u00f3digos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se env\u00edan.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users \u203a Doble factor propio**.\n2. **Auth \u203a Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el c\u00f3digo de 6 d\u00edgitos. D\u00f3nde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | D\u00f3nde llega el c\u00f3digo |\n   |---|---|\n   | vac\u00edas | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth \u203a Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vac\u00edas.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el c\u00f3digo sale hacia una direcci\u00f3n\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el env\u00edo s\u00ed funciona.\n\nRepetir el login emite un reto nuevo: esa es tambi\u00e9n la forma de reenviar el c\u00f3digo.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qu\u00e9 bot\u00f3n ofrecer. El cat\u00e1logo completo de c\u00f3digos est\u00e1 en\n`Docs/03-API-REST.md \u00a74`.\n\n**Bloqueo de cuenta:** cinco contrase\u00f1as incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petici\u00f3n de credenciales inv\u00e1lidas de esta colecci\u00f3n usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todav\u00eda no est\u00e1\n\nLos endpoints de `03-API-REST \u00a73.2` ya est\u00e1n completos. Siguen faltando tres filtros y un dato\nderivado: `plan_code` y `membership_status` en `GET /members`, `has_capacity` en `GET /trainers`, y la\ncarga actual en `GET /trainers/{id}`. Todos se calculan sobre `membership` o `trainer_assignment`, y\n`directory` no consulta las tablas de otro m\u00f3dulo.\n\nDe `notification` se cablean ocho de los diez tipos. `TRAINER_ALERT` y `PAYMENT_CONFIRMED` pertenecen a\n`training` y `billing`, que no existen: el enum los declara para espejar `ck_notification_type`, pero\nnadie los emite todav\u00eda.\n\nLas dos tareas programadas \u2014`MEMBERSHIP_EXPIRING` a las 07:00 y `MEMBERSHIP_EXPIRED` a las 00:05\u2014 no\ntienen endpoint que las dispare, as\u00ed que **no se pueden probar desde la colecci\u00f3n**. Para verlas hay\nque contratar una membres\u00eda que venza dentro de `gym.membership.expiry-notice-days` y esperar al\ncron, o adelantar su expresi\u00f3n en `application.yml`.\n\n---\n\n## Ejecuci\u00f3n automatizada\n\nCada petici\u00f3n trae aserciones, as\u00ed que la colecci\u00f3n corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, as\u00ed que la colecci\u00f3n se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (c\u00f3digo de verificaci\u00f3n, c\u00f3digo de recuperaci\u00f3n) se omiten\nsolas cuando la variable est\u00e1 vac\u00eda.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -20,7 +20,7 @@
       "key": "base_url",
       "value": "http://localhost:8080/api/v1",
       "type": "string",
-      "description": "Raíz de la API. En el servidor: http://<host>:8080/api/v1"
+      "description": "Ra\u00edz de la API. En el servidor: http://<host>:8080/api/v1"
     },
     {
       "key": "admin_username",
@@ -61,13 +61,13 @@
       "key": "recovery_challenge_id",
       "value": "",
       "type": "string",
-      "description": "La llena Recuperar contraseña."
+      "description": "La llena Recuperar contrase\u00f1a."
     },
     {
       "key": "recovery_code",
       "value": "",
       "type": "string",
-      "description": "Del correo o del log. Vacía = Restablecer contraseña se omite."
+      "description": "Del correo o del log. Vac\u00eda = Restablecer contrase\u00f1a se omite."
     },
     {
       "key": "two_factor_enabled",
@@ -79,13 +79,13 @@
       "key": "person_id",
       "value": "",
       "type": "string",
-      "description": "Persona del alta de socio. Lo guarda Members › Alta de socio."
+      "description": "Persona del alta de socio. Lo guarda Members \u203a Alta de socio."
     },
     {
       "key": "member_id",
       "value": "",
       "type": "string",
-      "description": "Socio creado. Lo guarda Members › Alta de socio."
+      "description": "Socio creado. Lo guarda Members \u203a Alta de socio."
     },
     {
       "key": "member_document",
@@ -103,7 +103,7 @@
       "key": "employee_id",
       "value": "",
       "type": "string",
-      "description": "Empleado creado. Lo guarda Employees › Alta de entrenador."
+      "description": "Empleado creado. Lo guarda Employees \u203a Alta de entrenador."
     },
     {
       "key": "employee_document",
@@ -133,7 +133,7 @@
       "key": "trainer_id",
       "value": "",
       "type": "string",
-      "description": "Perfil de entrenador. Lo guarda Employees › Alta de entrenador."
+      "description": "Perfil de entrenador. Lo guarda Employees \u203a Alta de entrenador."
     },
     {
       "key": "new_username",
@@ -145,7 +145,7 @@
       "key": "new_password",
       "value": "Socio123*",
       "type": "string",
-      "description": "Contraseña con la que nace la cuenta del socio."
+      "description": "Contrase\u00f1a con la que nace la cuenta del socio."
     },
     {
       "key": "membership_plan_id",
@@ -205,7 +205,7 @@
       "key": "access_membership_id",
       "value": "",
       "type": "string",
-      "description": "Membresía para el módulo access. La guarda 'Contratar membresía para el acceso'."
+      "description": "Membres\u00eda para el m\u00f3dulo access. La guarda 'Contratar membres\u00eda para el acceso'."
     },
     {
       "key": "facility_visit_id",
@@ -535,7 +535,7 @@
   "item": [
     {
       "name": "Auth",
-      "description": "Las cuatro primeras rutas son públicas; las dos últimas exigen token.",
+      "description": "Las cuatro primeras rutas son p\u00fablicas; las dos \u00faltimas exigen token.",
       "item": [
         {
           "name": "Login",
@@ -564,7 +564,7 @@
                 "login"
               ]
             },
-            "description": "**Público.**\n\nDos respuestas posibles:\n\n- `200` con `access_token` si el doble factor está desactivado.\n- `202` con `challenge_id` y `masked_destination` si está activado. El código **nunca** viaja en la respuesta.\n\nRepetir la llamada emite un reto nuevo: es también la forma de reenviar el código.\n\nEl script guarda `access_token`, `user_id` y `challenge_id` según el caso.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_CREDENTIALS` | 401 | Usuario o contraseña incorrectos. |\n| `ACCOUNT_BLOCKED` | 403 | Cinco intentos fallidos; se libera sola a los 15 minutos. |\n| `ACCOUNT_INACTIVE` | 403 | Cuenta desactivada o pendiente de activación. |"
+            "description": "**P\u00fablico.**\n\nDos respuestas posibles:\n\n- `200` con `access_token` si el doble factor est\u00e1 desactivado.\n- `202` con `challenge_id` y `masked_destination` si est\u00e1 activado. El c\u00f3digo **nunca** viaja en la respuesta.\n\nRepetir la llamada emite un reto nuevo: es tambi\u00e9n la forma de reenviar el c\u00f3digo.\n\nEl script guarda `access_token`, `user_id` y `challenge_id` seg\u00fan el caso.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_CREDENTIALS` | 401 | Usuario o contrase\u00f1a incorrectos. |\n| `ACCOUNT_BLOCKED` | 403 | Cinco intentos fallidos; se libera sola a los 15 minutos. |\n| `ACCOUNT_INACTIVE` | 403 | Cuenta desactivada o pendiente de activaci\u00f3n. |"
           },
           "event": [
             {
@@ -601,7 +601,7 @@
           ],
           "response": [
             {
-              "name": "200 · Doble factor desactivado",
+              "name": "200 \u00b7 Doble factor desactivado",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -638,7 +638,7 @@
               "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiJ9.firma\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"user\": {\n    \"app_user_id\": 1,\n    \"person_id\": 1,\n    \"username\": \"admin\",\n    \"full_name\": \"System Administrator\",\n    \"email\": \"admin@fitnessapp.local\",\n    \"role\": \"ADMIN\",\n    \"status\": \"ACTIVE\",\n    \"two_factor_enabled\": false,\n    \"two_factor_channel\": \"EMAIL\",\n    \"last_login_at\": \"2026-08-08T14:32:11.482Z\"\n  }\n}"
             },
             {
-              "name": "202 · Doble factor activado",
+              "name": "202 \u00b7 Doble factor activado",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -677,7 +677,7 @@
           ]
         },
         {
-          "name": "Login con credenciales inválidas",
+          "name": "Login con credenciales inv\u00e1lidas",
           "request": {
             "auth": {
               "type": "noauth"
@@ -703,7 +703,7 @@
                 "login"
               ]
             },
-            "description": "**Público.** Demuestra el cuerpo de error del sistema.\n\nUsa un usuario **inexistente** a propósito: repetir esta petición contra `admin` con la contraseña mala\nbloquearía la cuenta al quinto intento y dejaría la colección inservible.\n\nLa respuesta es la misma (`INVALID_CREDENTIALS`) exista o no el usuario: distinguirlas filtraría qué\ncuentas existen."
+            "description": "**P\u00fablico.** Demuestra el cuerpo de error del sistema.\n\nUsa un usuario **inexistente** a prop\u00f3sito: repetir esta petici\u00f3n contra `admin` con la contrase\u00f1a mala\nbloquear\u00eda la cuenta al quinto intento y dejar\u00eda la colecci\u00f3n inservible.\n\nLa respuesta es la misma (`INVALID_CREDENTIALS`) exista o no el usuario: distinguirlas filtrar\u00eda qu\u00e9\ncuentas existen."
           },
           "event": [
             {
@@ -727,7 +727,7 @@
           ],
           "response": [
             {
-              "name": "401 · Credenciales inválidas",
+              "name": "401 \u00b7 Credenciales inv\u00e1lidas",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -761,7 +761,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"error_code\": \"INVALID_CREDENTIALS\",\n  \"message\": \"Usuario o contraseña incorrectos.\",\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/auth/login\"\n}"
+              "body": "{\n  \"error_code\": \"INVALID_CREDENTIALS\",\n  \"message\": \"Usuario o contrase\u00f1a incorrectos.\",\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/auth/login\"\n}"
             }
           ]
         },
@@ -794,7 +794,7 @@
                 "verifications"
               ]
             },
-            "description": "**Público.** Canjea el código temporal por el `access_token`.\n\nEl código de 6 dígitos llega por correo si `.env` trae `MAIL_USERNAME` y `MAIL_PASSWORD`; si están\nvacías, se lee del log del contenedor:\n\n```bash\ndocker logs fitness_backend | grep -i verification\n```\n\nSe copia en la variable `verification_code`. La petición se omite sola si `challenge_id` o\n`verification_code` están vacías.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VERIFICATION_CODE_INVALID` | 400 | El código no coincide. Cuenta un intento. |\n| `VERIFICATION_CODE_EXPIRED` | 400 | Pasaron más de 10 minutos. |\n| `VERIFICATION_ATTEMPTS_EXCEEDED` | 429 | Tres intentos fallidos: el código se quema. |"
+            "description": "**P\u00fablico.** Canjea el c\u00f3digo temporal por el `access_token`.\n\nEl c\u00f3digo de 6 d\u00edgitos llega por correo si `.env` trae `MAIL_USERNAME` y `MAIL_PASSWORD`; si est\u00e1n\nvac\u00edas, se lee del log del contenedor:\n\n```bash\ndocker logs fitness_backend | grep -i verification\n```\n\nSe copia en la variable `verification_code`. La petici\u00f3n se omite sola si `challenge_id` o\n`verification_code` est\u00e1n vac\u00edas.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `VERIFICATION_CODE_INVALID` | 400 | El c\u00f3digo no coincide. Cuenta un intento. |\n| `VERIFICATION_CODE_EXPIRED` | 400 | Pasaron m\u00e1s de 10 minutos. |\n| `VERIFICATION_ATTEMPTS_EXCEEDED` | 429 | Tres intentos fallidos: el c\u00f3digo se quema. |"
           },
           "event": [
             {
@@ -833,7 +833,7 @@
           "response": []
         },
         {
-          "name": "Recuperar contraseña",
+          "name": "Recuperar contrase\u00f1a",
           "request": {
             "auth": {
               "type": "noauth"
@@ -859,7 +859,7 @@
                 "password-recoveries"
               ]
             },
-            "description": "**Público.** Inicia la recuperación: emite un código temporal y lo envía al correo (o al log, si no hay SMTP).\n\nResponde `202` con `challenge_id` y el destino enmascarado. Funciona también con la cuenta bloqueada:\nrecuperar la contraseña es justamente lo que la desbloquea.\n\nGuarda el reto en `recovery_challenge_id`. El código se lee del log y se copia en `recovery_code`."
+            "description": "**P\u00fablico.** Inicia la recuperaci\u00f3n: emite un c\u00f3digo temporal y lo env\u00eda al correo (o al log, si no hay SMTP).\n\nResponde `202` con `challenge_id` y el destino enmascarado. Funciona tambi\u00e9n con la cuenta bloqueada:\nrecuperar la contrase\u00f1a es justamente lo que la desbloquea.\n\nGuarda el reto en `recovery_challenge_id`. El c\u00f3digo se lee del log y se copia en `recovery_code`."
           },
           "event": [
             {
@@ -886,7 +886,7 @@
           "response": []
         },
         {
-          "name": "Restablecer contraseña",
+          "name": "Restablecer contrase\u00f1a",
           "request": {
             "auth": {
               "type": "noauth"
@@ -912,7 +912,7 @@
                 "password-resets"
               ]
             },
-            "description": "**Público.** Canjea el código de recuperación y fija la nueva contraseña. Responde `204`.\n\nSe omite sola mientras `recovery_code` esté vacía. Para ejecutarla: correr **Recuperar contraseña**,\nleer el código del log y pegarlo en la variable `recovery_code`.\n\n`new_password` usa `{{admin_password}}` a propósito, para que ejecutarla no rompa el resto de la colección.\nLa contraseña debe tener al menos 8 caracteres.\n\nUn restablecimiento correcto también reactiva una cuenta bloqueada."
+            "description": "**P\u00fablico.** Canjea el c\u00f3digo de recuperaci\u00f3n y fija la nueva contrase\u00f1a. Responde `204`.\n\nSe omite sola mientras `recovery_code` est\u00e9 vac\u00eda. Para ejecutarla: correr **Recuperar contrase\u00f1a**,\nleer el c\u00f3digo del log y pegarlo en la variable `recovery_code`.\n\n`new_password` usa `{{admin_password}}` a prop\u00f3sito, para que ejecutarla no rompa el resto de la colecci\u00f3n.\nLa contrase\u00f1a debe tener al menos 8 caracteres.\n\nUn restablecimiento correcto tambi\u00e9n reactiva una cuenta bloqueada."
           },
           "event": [
             {
@@ -958,7 +958,7 @@
                 "me"
               ]
             },
-            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qué mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la página.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
+            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qu\u00e9 mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la p\u00e1gina.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
           },
           "event": [
             {
@@ -985,7 +985,7 @@
           "response": []
         },
         {
-          "name": "Cerrar sesión",
+          "name": "Cerrar sesi\u00f3n",
           "request": {
             "method": "POST",
             "header": [],
@@ -999,7 +999,7 @@
                 "logout"
               ]
             },
-            "description": "**Todos los roles.** Responde `204`.\n\nEl token es *stateless* y no existe lista de revocación: el servidor no guarda sesión que cerrar.\nEl cliente descarta el token y este muere en su propio vencimiento (60 minutos).\n\nPor eso ejecutar esta petición **no** invalida el `access_token` que la colección ya tiene, y las\npeticiones siguientes continúan funcionando."
+            "description": "**Todos los roles.** Responde `204`.\n\nEl token es *stateless* y no existe lista de revocaci\u00f3n: el servidor no guarda sesi\u00f3n que cerrar.\nEl cliente descarta el token y este muere en su propio vencimiento (60 minutos).\n\nPor eso ejecutar esta petici\u00f3n **no** invalida el `access_token` que la colecci\u00f3n ya tiene, y las\npeticiones siguientes contin\u00faan funcionando."
           },
           "event": [
             {
@@ -1041,7 +1041,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Crea la `person` y el `member` en una sola llamada.\n\n**No crea la cuenta.** El alta es de dos pasos: este endpoint devuelve el `person_id` y con él se crea la credencial en **Users › Crear cuenta**. Así un expediente puede existir sin que nadie pueda entrar con él, que es el caso del invitado del pase de prueba.\n\n`member_code` lo genera el servidor a partir del `person_id`, con el formato `MEM-0007`.\n\nSi el documento pertenece a alguien que ya es socio responde `409 DOCUMENT_ALREADY_REGISTERED`. Si pertenece a alguien que solo es empleado, **reutiliza esa persona**: un entrenador que se inscribe como socio no duplica sus datos de contacto.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Falta un campo obligatorio o la fecha de nacimiento es futura. |\n| `DOCUMENT_ALREADY_REGISTERED` | 409 | Esa persona ya tiene expediente de socio. |\n| `FORBIDDEN_RESOURCE` | 403 | El rol no es administrador ni recepcionista. |",
+            "description": "**Administrador y recepcionista.** Crea la `person` y el `member` en una sola llamada.\n\n**No crea la cuenta.** El alta es de dos pasos: este endpoint devuelve el `person_id` y con \u00e9l se crea la credencial en **Users \u203a Crear cuenta**. As\u00ed un expediente puede existir sin que nadie pueda entrar con \u00e9l, que es el caso del invitado del pase de prueba.\n\n`member_code` lo genera el servidor a partir del `person_id`, con el formato `MEM-0007`.\n\nSi el documento pertenece a alguien que ya es socio responde `409 DOCUMENT_ALREADY_REGISTERED`. Si pertenece a alguien que solo es empleado, **reutiliza esa persona**: un entrenador que se inscribe como socio no duplica sus datos de contacto.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Falta un campo obligatorio o la fecha de nacimiento es futura. |\n| `DOCUMENT_ALREADY_REGISTERED` | 409 | Esa persona ya tiene expediente de socio. |\n| `FORBIDDEN_RESOURCE` | 403 | El rol no es administrador ni recepcionista. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{member_document}}\",\n    \"first_name\": \"Ana\",\n    \"last_name\": \"Lopez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{member_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Luis Lopez\",\n  \"emergency_contact_phone\": \"55550002\",\n  \"notes\": \"Alta desde la coleccion de Postman.\"\n}"
@@ -1110,7 +1110,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Repite el documento de la petición anterior.\n\n`uq_member_person` impide que la misma persona tenga dos expedientes de socio, y el servicio lo traduce a `409 DOCUMENT_ALREADY_REGISTERED` en vez de dejar que reviente la restricción.",
+            "description": "**Administrador y recepcionista.** Repite el documento de la petici\u00f3n anterior.\n\n`uq_member_person` impide que la misma persona tenga dos expedientes de socio, y el servicio lo traduce a `409 DOCUMENT_ALREADY_REGISTERED` en vez de dejar que reviente la restricci\u00f3n.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{member_document}}\",\n    \"first_name\": \"Ana\",\n    \"last_name\": \"Lopez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{member_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  }\n}"
@@ -1154,7 +1154,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "status",
@@ -1175,7 +1175,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** Listado paginado.\n\n`search` busca por nombre, apellido o número de documento.\n\nLos filtros `plan_code` y `membership_status` de `03-API-REST §3.2` **todavía no existen**: leen la tabla `membership`, que pertenece a un módulo que aún no está implementado.\n\nEl socio no aparece aquí: con rol `MEMBER` responde `403 FORBIDDEN_RESOURCE`."
+            "description": "**Administrador, recepcionista y entrenador.** Listado paginado.\n\n`search` busca por nombre, apellido o n\u00famero de documento.\n\nLos filtros `plan_code` y `membership_status` de `03-API-REST \u00a73.2` **todav\u00eda no existen**: leen la tabla `membership`, que pertenece a un m\u00f3dulo que a\u00fan no est\u00e1 implementado.\n\nEl socio no aparece aqu\u00ed: con rol `MEMBER` responde `403 FORBIDDEN_RESOURCE`."
           },
           "event": [
             {
@@ -1218,7 +1218,7 @@
                 "{{member_id}}"
               ]
             },
-            "description": "**Todos los roles.** Ficha completa del socio.\n\nEl socio solo alcanza la suya: con rol `MEMBER` pidiendo la ficha de otro, la respuesta es `403 FORBIDDEN_RESOURCE`. Esa comprobación vive en `MemberService` y no en un *matcher* de rutas, porque un *matcher* ve el camino pero no la fila que hay detrás.\n\nEl alcance del entrenador (*solo ve a los suyos*) llega con el módulo `training`: saber qué socios tiene asignados es un `COUNT` sobre `trainer_assignment`."
+            "description": "**Todos los roles.** Ficha completa del socio.\n\nEl socio solo alcanza la suya: con rol `MEMBER` pidiendo la ficha de otro, la respuesta es `403 FORBIDDEN_RESOURCE`. Esa comprobaci\u00f3n vive en `MemberService` y no en un *matcher* de rutas, porque un *matcher* ve el camino pero no la fila que hay detr\u00e1s.\n\nEl alcance del entrenador (*solo ve a los suyos*) llega con el m\u00f3dulo `training`: saber qu\u00e9 socios tiene asignados es un `COUNT` sobre `trainer_assignment`."
           },
           "event": [
             {
@@ -1262,7 +1262,7 @@
                 "{{member_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y el propio socio.** Datos personales y contacto de emergencia.\n\nEl estado no se cambia aquí: tiene su propio endpoint porque solo el administrador puede tocarlo.\n\nSi el documento que se envía pertenece a **otra** persona, responde `409 DOCUMENT_ALREADY_REGISTERED` en vez de un 500 de la restricción `uq_person_document`.",
+            "description": "**Administrador, recepcionista y el propio socio.** Datos personales y contacto de emergencia.\n\nEl estado no se cambia aqu\u00ed: tiene su propio endpoint porque solo el administrador puede tocarlo.\n\nSi el documento que se env\u00eda pertenece a **otra** persona, responde `409 DOCUMENT_ALREADY_REGISTERED` en vez de un 500 de la restricci\u00f3n `uq_person_document`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{member_document}}\",\n    \"first_name\": \"Ana Maria\",\n    \"last_name\": \"Lopez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{member_email}}\",\n    \"phone\": \"55559999\",\n    \"address\": \"8a avenida 15-30, zona 10\"\n  },\n  \"emergency_contact_name\": \"Luis Lopez\",\n  \"emergency_contact_phone\": \"55550002\",\n  \"notes\": \"Cambio de direccion y telefono.\"\n}"
@@ -1311,7 +1311,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** `WITHDRAWN` es la baja lógica: la fila **nunca se borra**, porque el historial de pagos, visitas e inscripciones apunta a ella.\n\nEl servicio fecha el expediente al darlo de baja, que es lo que espera `ck_member_term_on`.\n\nValores: `ACTIVE`, `INACTIVE`, `WITHDRAWN`.",
+            "description": "**Solo administrador.** `WITHDRAWN` es la baja l\u00f3gica: la fila **nunca se borra**, porque el historial de pagos, visitas e inscripciones apunta a ella.\n\nEl servicio fecha el expediente al darlo de baja, que es lo que espera `ck_member_term_on`.\n\nValores: `ACTIVE`, `INACTIVE`, `WITHDRAWN`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"WITHDRAWN\"\n}"
@@ -1360,7 +1360,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** Volver a `ACTIVE` limpia la fecha de baja: `ck_member_term_on` solo tiene sentido mientras el expediente está dado de baja.",
+            "description": "**Solo administrador.** Volver a `ACTIVE` limpia la fecha de baja: `ck_member_term_on` solo tiene sentido mientras el expediente est\u00e1 dado de baja.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"ACTIVE\"\n}"
@@ -1402,7 +1402,7 @@
                 "members"
               ]
             },
-            "description": "**Sin autenticación.** Comprueba que la ruta está cerrada: el filtro JWT responde `401 UNAUTHENTICATED` con el mismo cuerpo de error que el resto del sistema.",
+            "description": "**Sin autenticaci\u00f3n.** Comprueba que la ruta est\u00e1 cerrada: el filtro JWT responde `401 UNAUTHENTICATED` con el mismo cuerpo de error que el resto del sistema.",
             "auth": {
               "type": "noauth"
             }
@@ -1427,7 +1427,7 @@
     },
     {
       "name": "Employees",
-      "description": "Expediente del personal. Todo es del administrador. El alta de un puesto TRAINER abre además el perfil de entrenador.",
+      "description": "Expediente del personal. Todo es del administrador. El alta de un puesto TRAINER abre adem\u00e1s el perfil de entrenador.",
       "item": [
         {
           "name": "Alta de entrenador",
@@ -1448,7 +1448,7 @@
                 "employees"
               ]
             },
-            "description": "**Solo administrador.** Crea la `person`, el `employee` y —porque el puesto es `TRAINER`— también su fila en `trainer`.\n\n`trainer` existe como tabla propia y no como columna de `employee` porque solo el entrenador lleva tope de cartera, y porque las siete tablas de `training` apuntan aquí y no a `employee`.\n\n`max_member_load` y `bio` se ignoran cuando el puesto no es `TRAINER`. Si se omite la carga, queda en 20, que es el `DEFAULT` de la columna.\n\nPuestos: `ADMIN`, `RECEPTIONIST`, `TRAINER`. El puesto **no** es el rol de acceso: eso vive en `app_user.role` y se define al crear la cuenta.",
+            "description": "**Solo administrador.** Crea la `person`, el `employee` y \u2014porque el puesto es `TRAINER`\u2014 tambi\u00e9n su fila en `trainer`.\n\n`trainer` existe como tabla propia y no como columna de `employee` porque solo el entrenador lleva tope de cartera, y porque las siete tablas de `training` apuntan aqu\u00ed y no a `employee`.\n\n`max_member_load` y `bio` se ignoran cuando el puesto no es `TRAINER`. Si se omite la carga, queda en 20, que es el `DEFAULT` de la columna.\n\nPuestos: `ADMIN`, `RECEPTIONIST`, `TRAINER`. El puesto **no** es el rol de acceso: eso vive en `app_user.role` y se define al crear la cuenta.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{employee_document}}\",\n    \"first_name\": \"Marta\",\n    \"last_name\": \"Reyes\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1990-01-20\",\n    \"email\": \"{{employee_email}}\",\n    \"phone\": \"55550003\",\n    \"address\": \"5a avenida 10-20, zona 4\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-01-15\",\n  \"max_member_load\": 25,\n  \"bio\": \"Especialista en fuerza y acondicionamiento.\"\n}"
@@ -1574,7 +1574,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "position",
@@ -1601,7 +1601,7 @@
                 }
               ]
             },
-            "description": "**Solo administrador.** Listado paginado del personal.\n\n`search` busca por nombre, apellido o número de documento. Con cualquier otro rol responde `403 FORBIDDEN_RESOURCE`."
+            "description": "**Solo administrador.** Listado paginado del personal.\n\n`search` busca por nombre, apellido o n\u00famero de documento. Con cualquier otro rol responde `403 FORBIDDEN_RESOURCE`."
           },
           "event": [
             {
@@ -1682,7 +1682,7 @@
                 "{{employee_id}}"
               ]
             },
-            "description": "**Solo administrador.** Datos personales y fecha de contratación.\n\nEl **puesto no se edita** a propósito: mover a alguien hacia `TRAINER` tendría que abrir su perfil de entrenador, y sacarlo tendría que decidir qué pasa con su cartera. Eso es una recontratación, no una edición. El perfil de entrenador tiene su propio endpoint y el ciclo de vida tiene `PATCH /employees/{id}/status`.",
+            "description": "**Solo administrador.** Datos personales y fecha de contrataci\u00f3n.\n\nEl **puesto no se edita** a prop\u00f3sito: mover a alguien hacia `TRAINER` tendr\u00eda que abrir su perfil de entrenador, y sacarlo tendr\u00eda que decidir qu\u00e9 pasa con su cartera. Eso es una recontrataci\u00f3n, no una edici\u00f3n. El perfil de entrenador tiene su propio endpoint y el ciclo de vida tiene `PATCH /employees/{id}/status`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{employee_document}}\",\n    \"first_name\": \"Marta\",\n    \"last_name\": \"Reyes\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1990-01-20\",\n    \"email\": \"{{employee_email}}\",\n    \"phone\": \"55558888\",\n    \"address\": \"2a calle 3-45, zona 15\"\n  },\n  \"hired_on\": \"2026-01-15\"\n}"
@@ -1725,7 +1725,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** `TERMINATED` fecha la baja y **desactiva el perfil de entrenador**: un entrenador dado de baja deja de tomar socios.\n\nTransferir su cartera a otro entrenador conservando rutinas e historial es `POST /trainers/{id}/member-transfers`, que llega con el módulo `training`: la cartera vive en `trainer_assignment`, que es una tabla de ese módulo.\n\nValores: `ACTIVE`, `SUSPENDED`, `TERMINATED`.",
+            "description": "**Solo administrador.** `TERMINATED` fecha la baja y **desactiva el perfil de entrenador**: un entrenador dado de baja deja de tomar socios.\n\nTransferir su cartera a otro entrenador conservando rutinas e historial es `POST /trainers/{id}/member-transfers`, que llega con el m\u00f3dulo `training`: la cartera vive en `trainer_assignment`, que es una tabla de ese m\u00f3dulo.\n\nValores: `ACTIVE`, `SUSPENDED`, `TERMINATED`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"TERMINATED\"\n}"
@@ -1774,7 +1774,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** Volver a `ACTIVE` limpia la fecha de baja y reactiva el perfil de entrenador. La carpeta **Trainers** trabaja sobre él, así que esta petición lo deja utilizable.",
+            "description": "**Solo administrador.** Volver a `ACTIVE` limpia la fecha de baja y reactiva el perfil de entrenador. La carpeta **Trainers** trabaja sobre \u00e9l, as\u00ed que esta petici\u00f3n lo deja utilizable.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"ACTIVE\"\n}"
@@ -1815,10 +1815,10 @@
                 "employees"
               ]
             },
-            "description": "**Solo administrador.** El entrenador que recibe la cartera en **Trainers › Transferir la cartera**. La transferencia necesita dos perfiles vivos, y el alta es el único sitio donde nacen.\n\nSu `max_member_load` es holgado a propósito: `TRAINER_CAPACITY_EXCEEDED` se comprueba contra la cartera completa antes de mover a nadie, y con un tope corto la transferencia entera fallaría.",
+            "description": "**Solo administrador.** El entrenador que recibe la cartera en **Trainers \u203a Transferir la cartera**. La transferencia necesita dos perfiles vivos, y el alta es el \u00fanico sitio donde nacen.\n\nSu `max_member_load` es holgado a prop\u00f3sito: `TRAINER_CAPACITY_EXCEEDED` se comprueba contra la cartera completa antes de mover a nadie, y con un tope corto la transferencia entera fallar\u00eda.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{second_employee_document}}\",\n    \"first_name\": \"Luis\",\n    \"last_name\": \"Gómez\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1988-06-05\",\n    \"email\": \"{{second_employee_email}}\",\n    \"phone\": \"55550009\",\n    \"address\": \"12 calle 3-45, zona 10\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-02-01\",\n  \"max_member_load\": 30,\n  \"bio\": \"Rehabilitacion y entrenamiento funcional.\"\n}"
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{second_employee_document}}\",\n    \"first_name\": \"Luis\",\n    \"last_name\": \"G\u00f3mez\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1988-06-05\",\n    \"email\": \"{{second_employee_email}}\",\n    \"phone\": \"55550009\",\n    \"address\": \"12 calle 3-45, zona 10\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-02-01\",\n  \"max_member_load\": 30,\n  \"bio\": \"Rehabilitacion y entrenamiento funcional.\"\n}"
             }
           },
           "event": [
@@ -1861,7 +1861,7 @@
     },
     {
       "name": "Trainers",
-      "description": "Perfil del entrenador: tope de cartera, biografía y especialidades. Cualquier rol lee; solo el administrador escribe.",
+      "description": "Perfil del entrenador: tope de cartera, biograf\u00eda y especialidades. Cualquier rol lee; solo el administrador escribe.",
       "item": [
         {
           "name": "Listado de entrenadores",
@@ -1885,7 +1885,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "specialty",
@@ -1900,7 +1900,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** El socio también lo lee: es como elige entrenador.\n\nEl filtro `has_capacity` de `03-API-REST §3.2` **todavía no existe**: la capacidad es la cartera actual contra el tope, y la cartera se cuenta sobre `trainer_assignment`, una tabla de `training`."
+            "description": "**Todos los roles.** El socio tambi\u00e9n lo lee: es como elige entrenador.\n\nEl filtro `has_capacity` de `03-API-REST \u00a73.2` **todav\u00eda no existe**: la capacidad es la cartera actual contra el tope, y la cartera se cuenta sobre `trainer_assignment`, una tabla de `training`."
           },
           "event": [
             {
@@ -1936,7 +1936,7 @@
                 "{{trainer_id}}"
               ]
             },
-            "description": "**Todos los roles.** Perfil, especialidades y tope de cartera.\n\nLa **carga actual** de `03-API-REST §3.2 #15` no viene todavía: es `COUNT(*) FROM trainer_assignment WHERE trainer_id = ? AND end_date IS NULL`, y `directory` no consulta las tablas de otro módulo. Llega con `training`."
+            "description": "**Todos los roles.** Perfil, especialidades y tope de cartera.\n\nLa **carga actual** de `03-API-REST \u00a73.2 #15` no viene todav\u00eda: es `COUNT(*) FROM trainer_assignment WHERE trainer_id = ? AND end_date IS NULL`, y `directory` no consulta las tablas de otro m\u00f3dulo. Llega con `training`."
           },
           "event": [
             {
@@ -1980,7 +1980,7 @@
                 "{{trainer_id}}"
               ]
             },
-            "description": "**Solo administrador.** Tope de socios que el entrenador puede llevar, más la biografía que el socio lee al elegirlo.\n\n`ck_trainer_load` exige que el tope sea mayor que cero; la validación lo comprueba antes de llegar a la base, así que un `0` responde `400 VALIDATION_ERROR` con el campo señalado.",
+            "description": "**Solo administrador.** Tope de socios que el entrenador puede llevar, m\u00e1s la biograf\u00eda que el socio lee al elegirlo.\n\n`ck_trainer_load` exige que el tope sea mayor que cero; la validaci\u00f3n lo comprueba antes de llegar a la base, as\u00ed que un `0` responde `400 VALIDATION_ERROR` con el campo se\u00f1alado.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"max_member_load\": 30,\n  \"bio\": \"Fuerza, acondicionamiento y rehabilitacion.\"\n}"
@@ -2023,7 +2023,7 @@
                 "specialties"
               ]
             },
-            "description": "**Solo administrador.** **Reemplaza** el conjunto completo, no agrega.\n\nLa clave primaria de `trainer_specialty` es `(trainer_id, specialty)`, así que el cuerpo lleva un conjunto y no una lista: un valor repetido no sería una segunda fila, sería una clave duplicada.\n\nValores: `WEIGHT_LOSS`, `MUSCLE_GAIN`, `REHABILITATION`, `FUNCTIONAL`, `CARDIO`. Un conjunto vacío es válido: es como un entrenador deja de estar especializado.",
+            "description": "**Solo administrador.** **Reemplaza** el conjunto completo, no agrega.\n\nLa clave primaria de `trainer_specialty` es `(trainer_id, specialty)`, as\u00ed que el cuerpo lleva un conjunto y no una lista: un valor repetido no ser\u00eda una segunda fila, ser\u00eda una clave duplicada.\n\nValores: `WEIGHT_LOSS`, `MUSCLE_GAIN`, `REHABILITATION`, `FUNCTIONAL`, `CARDIO`. Un conjunto vac\u00edo es v\u00e1lido: es como un entrenador deja de estar especializado.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"specialties\": [\n    \"WEIGHT_LOSS\",\n    \"MUSCLE_GAIN\"\n  ]\n}"
@@ -2118,11 +2118,11 @@
                 {
                   "key": "specialty",
                   "value": "CARDIO",
-                  "description": "La especialidad que dejó la petición anterior."
+                  "description": "La especialidad que dej\u00f3 la petici\u00f3n anterior."
                 }
               ]
             },
-            "description": "**Todos los roles.** El filtro se resuelve con `MEMBER OF` sobre la colección de especialidades y no con un `JOIN`: un `JOIN` devolvería al mismo entrenador una vez por especialidad y rompería el conteo de la página."
+            "description": "**Todos los roles.** El filtro se resuelve con `MEMBER OF` sobre la colecci\u00f3n de especialidades y no con un `JOIN`: un `JOIN` devolver\u00eda al mismo entrenador una vez por especialidad y romper\u00eda el conteo de la p\u00e1gina."
           },
           "event": [
             {
@@ -2268,7 +2268,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcion.** «Cuando un socio con Plan Elite es dado de alta o realiza el upgrade a este plan, el administrador es quien realiza la asignacion del entrenador» (Enunciado). Sin este contrato la asignacion responde `409 MEMBERSHIP_NOT_ACTIVE`: primero hay membresia vigente, despues beneficio.",
+            "description": "**Administrador y recepcion.** \u00abCuando un socio con Plan Elite es dado de alta o realiza el upgrade a este plan, el administrador es quien realiza la asignacion del entrenador\u00bb (Enunciado). Sin este contrato la asignacion responde `409 MEMBERSHIP_NOT_ACTIVE`: primero hay membresia vigente, despues beneficio.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{trainer_member_id}},\n  \"membership_plan_id\": {{trainer_elite_plan_id}},\n  \"notes\": \"Elite: el unico plan con entrenador personal.\"\n}"
@@ -2404,7 +2404,7 @@
                 "trainer"
               ]
             },
-            "description": "**Solo administrador.** Abre la relación socio-entrenador: la fila de `trainer_assignment` con `end_date` nula es la asignación vigente, y las cerradas son el historial.\n\nEs la puerta de entrada de las otras dos rutas de esta carpeta: sin una fila abierta no hay entrenador que consultar ni cartera que transferir. También es lo que hace exigible «el entrenador solo ve a los suyos» de `§3.2`, y emite `TRAINER_ASSIGNED` a la bandeja del socio.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_ALREADY_ASSIGNED` | 409 | El socio ya tiene un entrenador vigente. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | El entrenador llegó a su tope de cartera. |\n| `TRANSFER_TARGET_INVALID` | 409 | El entrenador está dado de baja. |\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |",
+            "description": "**Solo administrador.** Abre la relaci\u00f3n socio-entrenador: la fila de `trainer_assignment` con `end_date` nula es la asignaci\u00f3n vigente, y las cerradas son el historial.\n\nEs la puerta de entrada de las otras dos rutas de esta carpeta: sin una fila abierta no hay entrenador que consultar ni cartera que transferir. Tambi\u00e9n es lo que hace exigible \u00abel entrenador solo ve a los suyos\u00bb de `\u00a73.2`, y emite `TRAINER_ASSIGNED` a la bandeja del socio.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRAINER_ALREADY_ASSIGNED` | 409 | El socio ya tiene un entrenador vigente. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | El entrenador lleg\u00f3 a su tope de cartera. |\n| `TRANSFER_TARGET_INVALID` | 409 | El entrenador est\u00e1 dado de baja. |\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
@@ -2453,7 +2453,7 @@
                 "trainer"
               ]
             },
-            "description": "**Solo administrador.** El mismo socio, otra vez. `uq_assign_current` es un índice único parcial sobre `member_id WHERE end_date IS NULL`: un socio tiene **un** entrenador vigente, y cambiarlo es cerrar el anterior, no abrir otro en paralelo.",
+            "description": "**Solo administrador.** El mismo socio, otra vez. `uq_assign_current` es un \u00edndice \u00fanico parcial sobre `member_id WHERE end_date IS NULL`: un socio tiene **un** entrenador vigente, y cambiarlo es cerrar el anterior, no abrir otro en paralelo.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
@@ -2496,7 +2496,7 @@
                 "trainer"
               ]
             },
-            "description": "**Solo administrador.** «El sistema debe validar, en cada intento de inscripcion a una clase **o de solicitud de entrenador**, si el plan actual del socio incluye ese beneficio; si no lo incluye, debe informarle claramente la restriccion y, opcionalmente, ofrecerle la opcion de mejorar su plan» (Enunciado).\n\n`suggested_action` viaja en `UPGRADE_PLAN`: es el boton que la interfaz debe ofrecer.",
+            "description": "**Solo administrador.** \u00abEl sistema debe validar, en cada intento de inscripcion a una clase **o de solicitud de entrenador**, si el plan actual del socio incluye ese beneficio; si no lo incluye, debe informarle claramente la restriccion y, opcionalmente, ofrecerle la opcion de mejorar su plan\u00bb (Enunciado).\n\n`suggested_action` viaja en `UPGRADE_PLAN`: es el boton que la interfaz debe ofrecer.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
@@ -2538,7 +2538,7 @@
                 "trainer"
               ]
             },
-            "description": "**Todos los roles.** «Entrenador asignado al socio» (`§3.2`). La ruta cuelga de `/members`, pero la respuesta se compone entre dos módulos: `training` dice qué tramo está abierto y `directory` dice quién es ese entrenador.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_ASSIGNMENT_NOT_FOUND` | 404 | El socio no tiene entrenador asignado. |"
+            "description": "**Todos los roles.** \u00abEntrenador asignado al socio\u00bb (`\u00a73.2`). La ruta cuelga de `/members`, pero la respuesta se compone entre dos m\u00f3dulos: `training` dice qu\u00e9 tramo est\u00e1 abierto y `directory` dice qui\u00e9n es ese entrenador.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRAINER_ASSIGNMENT_NOT_FOUND` | 404 | El socio no tiene entrenador asignado. |"
           },
           "event": [
             {
@@ -2577,7 +2577,7 @@
                 "member-transfers"
               ]
             },
-            "description": "**Solo administrador.** «La baja de un entrenador transfiere su cartera» (`§3.2`). El entrenador que se vacía va en la ruta; en el cuerpo viaja solo el destino.\n\nCada asignación vigente se cierra con `end_reason = TRAINER_LEFT` y se abre una nueva sobre el destino: **el historial no se reescribe**, se apila. Cada socio movido recibe `TRAINER_ASSIGNED` en su bandeja.\n\nEl tope del destino se comprueba contra la cartera **completa** antes de mover a nadie: media transferencia dejaría a los socios repartidos entre dos entrenadores.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRANSFER_TARGET_INVALID` | 409 | El destino es el mismo entrenador o está dado de baja. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | La cartera no cabe en el tope del destino. |\n| `TRAINER_NOT_FOUND` | 404 | Cualquiera de los dos entrenadores no existe. |",
+            "description": "**Solo administrador.** \u00abLa baja de un entrenador transfiere su cartera\u00bb (`\u00a73.2`). El entrenador que se vac\u00eda va en la ruta; en el cuerpo viaja solo el destino.\n\nCada asignaci\u00f3n vigente se cierra con `end_reason = TRAINER_LEFT` y se abre una nueva sobre el destino: **el historial no se reescribe**, se apila. Cada socio movido recibe `TRAINER_ASSIGNED` en su bandeja.\n\nEl tope del destino se comprueba contra la cartera **completa** antes de mover a nadie: media transferencia dejar\u00eda a los socios repartidos entre dos entrenadores.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRANSFER_TARGET_INVALID` | 409 | El destino es el mismo entrenador o est\u00e1 dado de baja. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | La cartera no cabe en el tope del destino. |\n| `TRAINER_NOT_FOUND` | 404 | Cualquiera de los dos entrenadores no existe. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
@@ -2622,7 +2622,7 @@
                 "trainer"
               ]
             },
-            "description": "**Todos los roles.** El mismo socio que la consulta anterior, ahora con el entrenador destino: es la prueba de que la transferencia cerró un tramo y abrió otro en lugar de sobrescribirlo."
+            "description": "**Todos los roles.** El mismo socio que la consulta anterior, ahora con el entrenador destino: es la prueba de que la transferencia cerr\u00f3 un tramo y abri\u00f3 otro en lugar de sobrescribirlo."
           },
           "event": [
             {
@@ -2661,7 +2661,7 @@
                 "member-transfers"
               ]
             },
-            "description": "**Solo administrador.** Origen y destino iguales. No es una operación vacía: cerraría cada tramo y lo volvería a abrir sobre el mismo entrenador, ensuciando el historial sin cambiar nada.",
+            "description": "**Solo administrador.** Origen y destino iguales. No es una operaci\u00f3n vac\u00eda: cerrar\u00eda cada tramo y lo volver\u00eda a abrir sobre el mismo entrenador, ensuciando el historial sin cambiar nada.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
@@ -2704,7 +2704,7 @@
                 "member-transfers"
               ]
             },
-            "description": "**Sin autenticación.** Comprueba que la ruta está cerrada: el filtro JWT responde `401 UNAUTHENTICATED` antes de mirar el cuerpo.",
+            "description": "**Sin autenticaci\u00f3n.** Comprueba que la ruta est\u00e1 cerrada: el filtro JWT responde `401 UNAUTHENTICATED` antes de mirar el cuerpo.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
@@ -2757,7 +2757,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "role",
@@ -2784,7 +2784,7 @@
                 }
               ]
             },
-            "description": "**Solo administrador.** Listado paginado de cuentas.\n\nLa respuesta es la envoltura estándar de `PagedModel<T>`: `content` más `page` con `size`, `number`,\n`total_elements` y `total_pages`.\n\nCon otro rol responde `403 FORBIDDEN_RESOURCE`."
+            "description": "**Solo administrador.** Listado paginado de cuentas.\n\nLa respuesta es la envoltura est\u00e1ndar de `PagedModel<T>`: `content` m\u00e1s `page` con `size`, `number`,\n`total_elements` y `total_pages`.\n\nCon otro rol responde `403 FORBIDDEN_RESOURCE`."
           },
           "event": [
             {
@@ -2873,7 +2873,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** Activa, desactiva o desbloquea una cuenta.\n\nValores: `ACTIVE`, `INACTIVE`, `BLOCKED`, `PENDING_ACTIVATION`.\n\nPasar a `ACTIVE` es también la forma de **desbloquear**: limpia el contador de intentos fallidos y el\nvencimiento del bloqueo.\n\nEl cuerpo de ejemplo manda `ACTIVE` sobre la propia cuenta de administrador a propósito: es idempotente\ny no deja la colección inservible."
+            "description": "**Solo administrador.** Activa, desactiva o desbloquea una cuenta.\n\nValores: `ACTIVE`, `INACTIVE`, `BLOCKED`, `PENDING_ACTIVATION`.\n\nPasar a `ACTIVE` es tambi\u00e9n la forma de **desbloquear**: limpia el contador de intentos fallidos y el\nvencimiento del bloqueo.\n\nEl cuerpo de ejemplo manda `ACTIVE` sobre la propia cuenta de administrador a prop\u00f3sito: es idempotente\ny no deja la colecci\u00f3n inservible."
           },
           "event": [
             {
@@ -2892,7 +2892,7 @@
           "response": []
         },
         {
-          "name": "Cambiar contraseña propia",
+          "name": "Cambiar contrase\u00f1a propia",
           "request": {
             "method": "PUT",
             "header": [
@@ -2916,7 +2916,7 @@
                 "password"
               ]
             },
-            "description": "**Todos los roles**, siempre sobre la cuenta autenticada. Responde `204`.\n\nExige la contraseña actual: `401 INVALID_CREDENTIALS` si no coincide. La nueva debe tener entre 8 y 72\ncaracteres.\n\nEl ejemplo repite la misma contraseña para que sea idempotente. **Este es el endpoint con el que se cambia\nla clave pública del administrador en el servidor**: sustituir `new_password` por la real."
+            "description": "**Todos los roles**, siempre sobre la cuenta autenticada. Responde `204`.\n\nExige la contrase\u00f1a actual: `401 INVALID_CREDENTIALS` si no coincide. La nueva debe tener entre 8 y 72\ncaracteres.\n\nEl ejemplo repite la misma contrase\u00f1a para que sea idempotente. **Este es el endpoint con el que se cambia\nla clave p\u00fablica del administrador en el servidor**: sustituir `new_password` por la real."
           },
           "event": [
             {
@@ -2958,7 +2958,7 @@
                 "two-factor"
               ]
             },
-            "description": "**Todos los roles.** Activa o desactiva el doble factor y elige el canal (`EMAIL` o `SMS`).\n\nCubre la frase del enunciado: *«esta información puede ser actualizada para solicitar este paso adicional\nde seguridad si el usuario así lo decide»*.\n\nEl valor viene de la variable `two_factor_enabled`, que arranca en `false` para que la colección sea\nrepetible. Ponerla en `true` y volver a ejecutar **Auth › Login** para ver el flujo del reto.\n\nCon `channel = SMS` no hay proveedor: el código se escribe en el log, tal como documenta `schema.sql`."
+            "description": "**Todos los roles.** Activa o desactiva el doble factor y elige el canal (`EMAIL` o `SMS`).\n\nCubre la frase del enunciado: *\u00abesta informaci\u00f3n puede ser actualizada para solicitar este paso adicional\nde seguridad si el usuario as\u00ed lo decide\u00bb*.\n\nEl valor viene de la variable `two_factor_enabled`, que arranca en `false` para que la colecci\u00f3n sea\nrepetible. Ponerla en `true` y volver a ejecutar **Auth \u203a Login** para ver el flujo del reto.\n\nCon `channel = SMS` no hay proveedor: el c\u00f3digo se escribe en el log, tal como documenta `schema.sql`."
           },
           "event": [
             {
@@ -2998,7 +2998,7 @@
                 "users"
               ]
             },
-            "description": "Comprueba que el backend prohíbe, no solo que la interfaz oculte.\n\nSin cabecera `Authorization` la cadena de filtros responde `401 UNAUTHENTICATED` con el mismo cuerpo de\nerror que el resto del sistema."
+            "description": "Comprueba que el backend proh\u00edbe, no solo que la interfaz oculte.\n\nSin cabecera `Authorization` la cadena de filtros responde `401 UNAUTHENTICATED` con el mismo cuerpo de\nerror que el resto del sistema."
           },
           "event": [
             {
@@ -3035,7 +3035,7 @@
                 "users"
               ]
             },
-            "description": "**Solo administrador.** Credenciales para una persona que **ya tiene expediente**.\n\nEs el segundo paso del alta: `POST /members` o `POST /employees` crea el expediente y devuelve el `person_id`; esta petición le pone credenciales. Separarlos deja que un expediente exista sin cuenta —el invitado del pase de prueba— y que la cuenta se cree solo cuando hace falta.\n\nEl `person_id` se valida contra `directory` antes de crear nada: la cuenta de alguien de quien el gimnasio no tiene expediente es justo lo que este endpoint no debe crear.\n\nLa cuenta nace `ACTIVE` y con **doble factor encendido**, que es el `DEFAULT` de la columna. El primer inicio de sesión de esa persona responde `202` con un reto.\n\nRoles: `ADMIN`, `RECEPTIONIST`, `TRAINER`, `MEMBER`. El rol de acceso no es el puesto: un entrenador que además es socio tiene **una** cuenta, porque `uq_app_user_person` así lo exige.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PERSON_NOT_FOUND` | 404 | El `person_id` no existe. |\n| `USERNAME_TAKEN` | 409 | El nombre de usuario ya está tomado. |\n| `PERSON_ALREADY_HAS_ACCOUNT` | 409 | Esa persona ya tiene credenciales. |",
+            "description": "**Solo administrador.** Credenciales para una persona que **ya tiene expediente**.\n\nEs el segundo paso del alta: `POST /members` o `POST /employees` crea el expediente y devuelve el `person_id`; esta petici\u00f3n le pone credenciales. Separarlos deja que un expediente exista sin cuenta \u2014el invitado del pase de prueba\u2014 y que la cuenta se cree solo cuando hace falta.\n\nEl `person_id` se valida contra `directory` antes de crear nada: la cuenta de alguien de quien el gimnasio no tiene expediente es justo lo que este endpoint no debe crear.\n\nLa cuenta nace `ACTIVE` y con **doble factor encendido**, que es el `DEFAULT` de la columna. El primer inicio de sesi\u00f3n de esa persona responde `202` con un reto.\n\nRoles: `ADMIN`, `RECEPTIONIST`, `TRAINER`, `MEMBER`. El rol de acceso no es el puesto: un entrenador que adem\u00e1s es socio tiene **una** cuenta, porque `uq_app_user_person` as\u00ed lo exige.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `PERSON_NOT_FOUND` | 404 | El `person_id` no existe. |\n| `USERNAME_TAKEN` | 409 | El nombre de usuario ya est\u00e1 tomado. |\n| `PERSON_ALREADY_HAS_ACCOUNT` | 409 | Esa persona ya tiene credenciales. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person_id\": \"{{person_id}}\",\n  \"username\": \"{{new_username}}\",\n  \"password\": \"{{new_password}}\",\n  \"role\": \"MEMBER\"\n}"
@@ -3101,7 +3101,7 @@
                 "users"
               ]
             },
-            "description": "**Solo administrador.** Repite el `person_id` de la petición anterior.\n\n`uq_app_user_person` es lo que garantiza que un entrenador que además es socio entre con una sola cuenta y no con dos.",
+            "description": "**Solo administrador.** Repite el `person_id` de la petici\u00f3n anterior.\n\n`uq_app_user_person` es lo que garantiza que un entrenador que adem\u00e1s es socio entre con una sola cuenta y no con dos.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person_id\": \"{{person_id}}\",\n  \"username\": \"{{new_username}}-bis\",\n  \"password\": \"{{new_password}}\",\n  \"role\": \"MEMBER\"\n}"
@@ -3142,7 +3142,7 @@
                 "users"
               ]
             },
-            "description": "**Solo administrador.** Un `person_id` que no existe.\n\nÉsta es la comprobación que sostiene la decisión de tener `POST /users`: el endpoint no puede crear una cuenta huérfana, porque valida la persona contra `directory` antes de escribir nada.",
+            "description": "**Solo administrador.** Un `person_id` que no existe.\n\n\u00c9sta es la comprobaci\u00f3n que sostiene la decisi\u00f3n de tener `POST /users`: el endpoint no puede crear una cuenta hu\u00e9rfana, porque valida la persona contra `directory` antes de escribir nada.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person_id\": 999999,\n  \"username\": \"fantasma\",\n  \"password\": \"Fantasma123*\",\n  \"role\": \"MEMBER\"\n}"
@@ -3168,7 +3168,7 @@
     },
     {
       "name": "Membership Plans",
-      "description": "Catálogo de planes del módulo `membership` (`03-API-REST §3.3`). El administrador lo mantiene; los demás roles solo lo leen para comparar planes antes de contratar.\n\nUn plan **nunca se borra**: `PATCH /membership-plans/{id}/status` lo desactiva y los contratos ya firmados lo siguen apuntando (`fk_membership_plan` es `ON DELETE RESTRICT`).",
+      "description": "Cat\u00e1logo de planes del m\u00f3dulo `membership` (`03-API-REST \u00a73.3`). El administrador lo mantiene; los dem\u00e1s roles solo lo leen para comparar planes antes de contratar.\n\nUn plan **nunca se borra**: `PATCH /membership-plans/{id}/status` lo desactiva y los contratos ya firmados lo siguen apuntando (`fk_membership_plan` es `ON DELETE RESTRICT`).",
       "item": [
         {
           "name": "Catalogo de planes",
@@ -3192,7 +3192,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "sort",
@@ -3202,12 +3202,12 @@
                 {
                   "key": "active",
                   "value": "true",
-                  "description": "true | false. Sin el filtro devuelve todo el catálogo.",
+                  "description": "true | false. Sin el filtro devuelve todo el cat\u00e1logo.",
                   "disabled": true
                 }
               ]
             },
-            "description": "**Administrador, recepcionista, entrenador y socio.** Catálogo con beneficios y precios.\n\nSe ordena por `tier` para que los tres planes sembrados (`BASIC`, `PREMIUM`, `ELITE`) encabecen la lista: el script guarda los dos primeros para el resto de la corrida.\n\n`weekly_class_limit` nulo con `includes_group_classes` en `true` significa **clases ilimitadas** (Plan Élite)."
+            "description": "**Administrador, recepcionista, entrenador y socio.** Cat\u00e1logo con beneficios y precios.\n\nSe ordena por `tier` para que los tres planes sembrados (`BASIC`, `PREMIUM`, `ELITE`) encabecen la lista: el script guarda los dos primeros para el resto de la corrida.\n\n`weekly_class_limit` nulo con `includes_group_classes` en `true` significa **clases ilimitadas** (Plan \u00c9lite)."
           },
           "event": [
             {
@@ -3259,7 +3259,7 @@
                 "membership-plans"
               ]
             },
-            "description": "**Solo administrador.** Crea un plan nuevo.\n\n`code` y `tier` son únicos (`uq_plan_code`, `uq_plan_tier`), así que el script previo los genera por corrida. `tier` gobierna dos reglas a la vez: qué cambio de plan es *upgrade* y quién tiene prioridad en la lista de espera.\n\n`active` no se envía: nace activo y solo `PATCH .../status` lo cambia.",
+            "description": "**Solo administrador.** Crea un plan nuevo.\n\n`code` y `tier` son \u00fanicos (`uq_plan_code`, `uq_plan_tier`), as\u00ed que el script previo los genera por corrida. `tier` gobierna dos reglas a la vez: qu\u00e9 cambio de plan es *upgrade* y qui\u00e9n tiene prioridad en la lista de espera.\n\n`active` no se env\u00eda: nace activo y solo `PATCH .../status` lo cambia.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{temp_plan_code}}\",\n  \"name\": \"Plan de prueba\",\n  \"description\": \"Plan creado por la coleccion de Postman.\",\n  \"billing_period\": \"QUARTERLY\",\n  \"price\": 900.0,\n  \"tier\": {{temp_plan_tier}},\n  \"includes_group_classes\": true,\n  \"weekly_class_limit\": 2,\n  \"includes_personal_trainer\": false\n}"
@@ -3323,7 +3323,7 @@
                 "membership-plans"
               ]
             },
-            "description": "**Solo administrador.** Un plan sin clases grupales no puede llevar límite semanal de clases: es la restricción `ck_plan_limit_ok` del esquema, validada en el servicio para que la respuesta sea un `400` legible y no una violación de constraint.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | `weekly_class_limit` con `includes_group_classes` en `false`. |",
+            "description": "**Solo administrador.** Un plan sin clases grupales no puede llevar l\u00edmite semanal de clases: es la restricci\u00f3n `ck_plan_limit_ok` del esquema, validada en el servicio para que la respuesta sea un `400` legible y no una violaci\u00f3n de constraint.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | `weekly_class_limit` con `includes_group_classes` en `false`. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{temp_plan_code}}X\",\n  \"name\": \"Plan incoherente\",\n  \"billing_period\": \"MONTHLY\",\n  \"price\": 100.0,\n  \"tier\": 32000,\n  \"includes_group_classes\": false,\n  \"weekly_class_limit\": 3,\n  \"includes_personal_trainer\": false\n}"
@@ -3365,7 +3365,7 @@
                 "{{membership_plan_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Detalle de un plan del catálogo.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |"
+            "description": "**Administrador, recepcionista y socio.** Detalle de un plan del cat\u00e1logo.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |"
           },
           "event": [
             {
@@ -3409,7 +3409,7 @@
                 "{{temp_plan_id}}"
               ]
             },
-            "description": "**Solo administrador.** Modifica nombre, precio, periodicidad y beneficios.\n\n`code` y `tier` no viajan en el cuerpo: identifican al plan y son únicos. El precio nuevo solo alcanza a los contratos firmados de aquí en adelante, porque `membership.paid_price` congeló los anteriores.",
+            "description": "**Solo administrador.** Modifica nombre, precio, periodicidad y beneficios.\n\n`code` y `tier` no viajan en el cuerpo: identifican al plan y son \u00fanicos. El precio nuevo solo alcanza a los contratos firmados de aqu\u00ed en adelante, porque `membership.paid_price` congel\u00f3 los anteriores.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Plan de prueba renombrado\",\n  \"description\": \"Precio y beneficios modificados por la coleccion.\",\n  \"billing_period\": \"SEMIANNUAL\",\n  \"price\": 1500.5,\n  \"includes_group_classes\": true,\n  \"weekly_class_limit\": 5,\n  \"includes_personal_trainer\": true\n}"
@@ -3459,7 +3459,7 @@
                 "status"
               ]
             },
-            "description": "**Solo administrador.** Activa o desactiva el plan sin borrarlo. Desactivarlo solo lo cierra a contratos nuevos: los que ya están vigentes siguen corriendo hasta vencer.",
+            "description": "**Solo administrador.** Activa o desactiva el plan sin borrarlo. Desactivarlo solo lo cierra a contratos nuevos: los que ya est\u00e1n vigentes siguen corriendo hasta vencer.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"active\": false\n}"
@@ -3491,7 +3491,7 @@
     },
     {
       "name": "Memberships",
-      "description": "Ciclo de vida del contrato (`03-API-REST §3.3`): contratación, congelamiento con recálculo de vencimiento, renovación, cambio de plan y cancelación.\n\n**Los cuatro estados del enunciado y sus transiciones:**\n\n| Desde | A | Cómo |\n|---|---|---|\n| — | `ACTIVE` | `POST /memberships` |\n| `ACTIVE` | `FROZEN` | `POST /memberships/{id}/freezes` |\n| `FROZEN` | `ACTIVE` | `POST /memberships/{id}/reactivations` |\n| `ACTIVE` | `EXPIRED` | tarea programada diaria a las 00:05 |\n| `ACTIVE` · `EXPIRED` | contrato nuevo | `renewals` · `plan-changes` |\n| `ACTIVE` · `FROZEN` · `EXPIRED` | `CANCELLED` | `cancellations` (definitivo) |\n\nLos cambios de estado con datos propios son sub-recursos `POST`, nunca verbos en la URI.\n\n**Usa el `member_id` que dejó la carpeta Members**, así que la colección se ejecuta de arriba abajo.",
+      "description": "Ciclo de vida del contrato (`03-API-REST \u00a73.3`): contrataci\u00f3n, congelamiento con rec\u00e1lculo de vencimiento, renovaci\u00f3n, cambio de plan y cancelaci\u00f3n.\n\n**Los cuatro estados del enunciado y sus transiciones:**\n\n| Desde | A | C\u00f3mo |\n|---|---|---|\n| \u2014 | `ACTIVE` | `POST /memberships` |\n| `ACTIVE` | `FROZEN` | `POST /memberships/{id}/freezes` |\n| `FROZEN` | `ACTIVE` | `POST /memberships/{id}/reactivations` |\n| `ACTIVE` | `EXPIRED` | tarea programada diaria a las 00:05 |\n| `ACTIVE` \u00b7 `EXPIRED` | contrato nuevo | `renewals` \u00b7 `plan-changes` |\n| `ACTIVE` \u00b7 `FROZEN` \u00b7 `EXPIRED` | `CANCELLED` | `cancellations` (definitivo) |\n\nLos cambios de estado con datos propios son sub-recursos `POST`, nunca verbos en la URI.\n\n**Usa el `member_id` que dej\u00f3 la carpeta Members**, as\u00ed que la colecci\u00f3n se ejecuta de arriba abajo.",
       "item": [
         {
           "name": "Contratar membresia",
@@ -3512,7 +3512,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Contrata una membresía para un socio.\n\nNo se envían ni el precio ni la fecha de vencimiento: `paid_price` es el precio vigente del plan —lo que congela lo pactado frente a cambios de tarifa posteriores— y `end_date` sale del período del plan. `start_date` vacío significa hoy.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato vigente. |",
+            "description": "**Administrador y recepcionista.** Contrata una membres\u00eda para un socio.\n\nNo se env\u00edan ni el precio ni la fecha de vencimiento: `paid_price` es el precio vigente del plan \u2014lo que congela lo pactado frente a cambios de tarifa posteriores\u2014 y `end_date` sale del per\u00edodo del plan. `start_date` vac\u00edo significa hoy.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan no existe. |\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato vigente. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{member_id}},\n  \"membership_plan_id\": {{membership_plan_id}},\n  \"notes\": \"Contratacion desde la coleccion de Postman.\"\n}"
@@ -3564,7 +3564,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Un socio no puede tener dos contratos en vigor a la vez: es el índice parcial `uq_membership_in_force`, y el servicio lo responde con un código de negocio en lugar de una violación de restricción.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato `ACTIVE` o `FROZEN`. |",
+            "description": "**Administrador y recepcionista.** Un socio no puede tener dos contratos en vigor a la vez: es el \u00edndice parcial `uq_membership_in_force`, y el servicio lo responde con un c\u00f3digo de negocio en lugar de una violaci\u00f3n de restricci\u00f3n.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_ALREADY_ACTIVE` | 409 | El socio ya tiene un contrato `ACTIVE` o `FROZEN`. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{member_id}},\n  \"membership_plan_id\": {{membership_plan_id}}\n}"
@@ -3613,7 +3613,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "status",
@@ -3691,7 +3691,7 @@
                 }
               ]
             },
-            "description": "**Administrador y recepcionista.** La consulta rápida del recepcionista: *\"estado de membresía de un socio (activa, congelada, vencida o **próxima a vencer**)\"*.\n\n\"Próxima a vencer\" es un **estado derivado**, nunca almacenado: es `status = 'ACTIVE'` con `end_date` dentro de los próximos `expiring_in_days`. Por eso el filtro asume `ACTIVE` si no se manda un `status` explícito."
+            "description": "**Administrador y recepcionista.** La consulta r\u00e1pida del recepcionista: *\"estado de membres\u00eda de un socio (activa, congelada, vencida o **pr\u00f3xima a vencer**)\"*.\n\n\"Pr\u00f3xima a vencer\" es un **estado derivado**, nunca almacenado: es `status = 'ACTIVE'` con `end_date` dentro de los pr\u00f3ximos `expiring_in_days`. Por eso el filtro asume `ACTIVE` si no se manda un `status` expl\u00edcito."
           },
           "event": [
             {
@@ -3731,7 +3731,7 @@
                 "{{membership_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Detalle del contrato, con beneficios y días restantes.\n\nEl socio solo alcanza los suyos: esa regla vive en el servicio y no en un *matcher* de rutas, porque un patrón ve la ruta pero no la fila que hay detrás.\n\n`days_remaining` es derivado y jamás se almacena.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_NOT_FOUND` | 404 | El contrato no existe. |\n| `FORBIDDEN_RESOURCE` | 403 | Un socio pidió un contrato ajeno. |"
+            "description": "**Administrador, recepcionista y socio.** Detalle del contrato, con beneficios y d\u00edas restantes.\n\nEl socio solo alcanza los suyos: esa regla vive en el servicio y no en un *matcher* de rutas, porque un patr\u00f3n ve la ruta pero no la fila que hay detr\u00e1s.\n\n`days_remaining` es derivado y jam\u00e1s se almacena.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_NOT_FOUND` | 404 | El contrato no existe. |\n| `FORBIDDEN_RESOURCE` | 403 | Un socio pidi\u00f3 un contrato ajeno. |"
           },
           "event": [
             {
@@ -3776,7 +3776,7 @@
                 "freezes"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Congela la membresía *\"indicando un motivo y, opcionalmente, una fecha estimada de reactivación\"*.\n\nEs un sub-recurso `POST` y no un `PATCH .../status` porque el congelamiento es un hecho de negocio con datos propios: crea una fila real en `membership_freeze`.\n\n**No se descuenta tiempo de vigencia del plan:** `end_date` no se toca aquí. Lo que la corre es la reactivación.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `FREEZE_LIMIT_REACHED` | 409 | Superó los días o las veces del ciclo (`gym.freeze.*`: 15 días y 2 veces por 90 días). |\n| `MEMBERSHIP_FROZEN` · `MEMBERSHIP_EXPIRED` · `MEMBERSHIP_CANCELLED` | 409 | El contrato no está activo. |",
+            "description": "**Administrador, recepcionista y socio.** Congela la membres\u00eda *\"indicando un motivo y, opcionalmente, una fecha estimada de reactivaci\u00f3n\"*.\n\nEs un sub-recurso `POST` y no un `PATCH .../status` porque el congelamiento es un hecho de negocio con datos propios: crea una fila real en `membership_freeze`.\n\n**No se descuenta tiempo de vigencia del plan:** `end_date` no se toca aqu\u00ed. Lo que la corre es la reactivaci\u00f3n.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `FREEZE_LIMIT_REACHED` | 409 | Super\u00f3 los d\u00edas o las veces del ciclo (`gym.freeze.*`: 15 d\u00edas y 2 veces por 90 d\u00edas). |\n| `MEMBERSHIP_FROZEN` \u00b7 `MEMBERSHIP_EXPIRED` \u00b7 `MEMBERSHIP_CANCELLED` | 409 | El contrato no est\u00e1 activo. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"TRAVEL\",\n  \"reason_detail\": \"Viaje de trabajo registrado desde Postman.\",\n  \"expected_end_date\": null\n}"
@@ -3825,7 +3825,7 @@
                 "freezes"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** La máquina de estados no admite congelar lo que ya está congelado, y responde con el código exacto del estado en lugar de uno genérico, para que la interfaz ofrezca el botón correcto (`suggested_action: REACTIVATE_MEMBERSHIP`).\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_FROZEN` | 409 | El contrato ya está congelado. |",
+            "description": "**Administrador, recepcionista y socio.** La m\u00e1quina de estados no admite congelar lo que ya est\u00e1 congelado, y responde con el c\u00f3digo exacto del estado en lugar de uno gen\u00e9rico, para que la interfaz ofrezca el bot\u00f3n correcto (`suggested_action: REACTIVATE_MEMBERSHIP`).\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_FROZEN` | 409 | El contrato ya est\u00e1 congelado. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"INJURY\"\n}"
@@ -3868,7 +3868,7 @@
                 "freezes"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Congelamientos del contrato **y días acumulados en el ciclo**.\n\nNo va paginado como el resto de las colecciones porque los contadores son la mitad de la respuesta: la interfaz necesita los topes vigentes para avisarle al socio cuánto le queda antes de `FREEZE_LIMIT_REACHED`.\n\nLos días congelados **no se almacenan**: son `reactivated_on - start_date`. El congelamiento está en curso mientras `reactivated_on` sea nulo, así que tampoco hay columna de estado."
+            "description": "**Administrador, recepcionista y socio.** Congelamientos del contrato **y d\u00edas acumulados en el ciclo**.\n\nNo va paginado como el resto de las colecciones porque los contadores son la mitad de la respuesta: la interfaz necesita los topes vigentes para avisarle al socio cu\u00e1nto le queda antes de `FREEZE_LIMIT_REACHED`.\n\nLos d\u00edas congelados **no se almacenan**: son `reactivated_on - start_date`. El congelamiento est\u00e1 en curso mientras `reactivated_on` sea nulo, as\u00ed que tampoco hay columna de estado."
           },
           "event": [
             {
@@ -3910,7 +3910,7 @@
                 "reactivations"
               ]
             },
-            "description": "**Solo administrador y recepcionista.** *\"El administrador o el recepcionista deben poder reactivarla manualmente cuando el socio lo solicite\"*, por eso el socio no aparece en esta fila.\n\nNo lleva cuerpo: lo que recalcula el vencimiento es la fecha real de hoy. *\"Al reactivarse, la nueva fecha de vencimiento se recalcula sumando el tiempo que permaneció congelada\"*.\n\nEn esta corrida el congelamiento duró cero días, así que `end_date` queda igual: la suma se nota cuando pasan días entre congelar y reactivar.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `FREEZE_NOT_IN_PROGRESS` | 409 | La membresía no está congelada. |"
+            "description": "**Solo administrador y recepcionista.** *\"El administrador o el recepcionista deben poder reactivarla manualmente cuando el socio lo solicite\"*, por eso el socio no aparece en esta fila.\n\nNo lleva cuerpo: lo que recalcula el vencimiento es la fecha real de hoy. *\"Al reactivarse, la nueva fecha de vencimiento se recalcula sumando el tiempo que permaneci\u00f3 congelada\"*.\n\nEn esta corrida el congelamiento dur\u00f3 cero d\u00edas, as\u00ed que `end_date` queda igual: la suma se nota cuando pasan d\u00edas entre congelar y reactivar.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `FREEZE_NOT_IN_PROGRESS` | 409 | La membres\u00eda no est\u00e1 congelada. |"
           },
           "event": [
             {
@@ -3956,7 +3956,7 @@
                 "renewals"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** *\"Solicitar la renovación de su membresía\"*.\n\nRenovar **crea el contrato siguiente encadenado al actual**: el nuevo arranca donde terminaba el anterior, así que no se pierde ni un día, y el anterior pasa a `EXPIRED` porque `uq_membership_in_force` no admite dos contratos en vigor.\n\nNo lleva cuerpo: se renueva el mismo plan. Para cambiarlo está `plan-changes`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El contrato está congelado o cancelado. |"
+            "description": "**Administrador, recepcionista y socio.** *\"Solicitar la renovaci\u00f3n de su membres\u00eda\"*.\n\nRenovar **crea el contrato siguiente encadenado al actual**: el nuevo arranca donde terminaba el anterior, as\u00ed que no se pierde ni un d\u00eda, y el anterior pasa a `EXPIRED` porque `uq_membership_in_force` no admite dos contratos en vigor.\n\nNo lleva cuerpo: se renueva el mismo plan. Para cambiarlo est\u00e1 `plan-changes`.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El contrato est\u00e1 congelado o cancelado. |"
           },
           "event": [
             {
@@ -4007,7 +4007,7 @@
                 "plan-changes"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** *\"Solicitar el cambio de su membresía\"*. Que sea *upgrade* o *downgrade* lo decide el `tier` de ambos planes, así que no se declara.\n\nComo la renovación, crea directamente el contrato nuevo y retira el anterior. Arranca hoy con el período completo del plan destino: **no hay prorrateo**.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan destino no existe. |\n| `VALIDATION_ERROR` | 400 | El plan destino está desactivado, o ya es el contratado. |",
+            "description": "**Administrador, recepcionista y socio.** *\"Solicitar el cambio de su membres\u00eda\"*. Que sea *upgrade* o *downgrade* lo decide el `tier` de ambos planes, as\u00ed que no se declara.\n\nComo la renovaci\u00f3n, crea directamente el contrato nuevo y retira el anterior. Arranca hoy con el per\u00edodo completo del plan destino: **no hay prorrateo**.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_PLAN_NOT_FOUND` | 404 | El plan destino no existe. |\n| `VALIDATION_ERROR` | 400 | El plan destino est\u00e1 desactivado, o ya es el contratado. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"membership_plan_id\": {{alt_membership_plan_id}},\n  \"notes\": \"Upgrade solicitado desde la coleccion.\"\n}"
@@ -4064,7 +4064,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Historial de contratos del socio (`03-API-REST §3.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `membership`: la matriz de dependencias de `02-Modulos §3` dice que `directory` **no** usa `membership`, solo al revés, así que el *handler* vive en el módulo dueño de los datos.\n\nDespués de contratar, renovar y cambiar de plan deben verse tres contratos: el vigente y dos `EXPIRED`."
+            "description": "**Administrador, recepcionista y socio.** Historial de contratos del socio (`03-API-REST \u00a73.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `membership`: la matriz de dependencias de `02-Modulos \u00a73` dice que `directory` **no** usa `membership`, solo al rev\u00e9s, as\u00ed que el *handler* vive en el m\u00f3dulo due\u00f1o de los datos.\n\nDespu\u00e9s de contratar, renovar y cambiar de plan deben verse tres contratos: el vigente y dos `EXPIRED`."
           },
           "event": [
             {
@@ -4128,7 +4128,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** Los filtros `plan_code` y `membership_status` de `03-API-REST §3.2`, que solo pudieron implementarse al existir `membership`.\n\nFiltran sobre el contrato **vigente** de cada socio, no sobre cualquiera de su historial: sin eso, pedir `EXPIRED` devolvería también a quien ya renovó."
+            "description": "**Administrador, recepcionista y entrenador.** Los filtros `plan_code` y `membership_status` de `03-API-REST \u00a73.2`, que solo pudieron implementarse al existir `membership`.\n\nFiltran sobre el contrato **vigente** de cada socio, no sobre cualquiera de su historial: sin eso, pedir `EXPIRED` devolver\u00eda tambi\u00e9n a quien ya renov\u00f3."
           },
           "event": [
             {
@@ -4186,7 +4186,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** El control negativo del filtro anterior: nadie contrata el Plan Élite en esta colección, así que el socio de la corrida **no** debe aparecer.\n\nSin esta petición la anterior pasaría igual aunque el filtro se ignorara por completo y devolviera todos los socios."
+            "description": "**Administrador, recepcionista y entrenador.** El control negativo del filtro anterior: nadie contrata el Plan \u00c9lite en esta colecci\u00f3n, as\u00ed que el socio de la corrida **no** debe aparecer.\n\nSin esta petici\u00f3n la anterior pasar\u00eda igual aunque el filtro se ignorara por completo y devolviera todos los socios."
           },
           "event": [
             {
@@ -4232,7 +4232,7 @@
                 "cancellations"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** *\"A diferencia de vencida, este estado es definitivo y debe quedar registrado junto con la fecha y, opcionalmente, un motivo de cancelación, útil para los reportes administrativos\"*.\n\nEl motivo es opcional; la fecha no: el servicio siempre la escribe, porque `ck_membership_cancel` exige que `CANCELLED` y `cancelled_on` concuerden en ambos sentidos.",
+            "description": "**Administrador, recepcionista y socio.** *\"A diferencia de vencida, este estado es definitivo y debe quedar registrado junto con la fecha y, opcionalmente, un motivo de cancelaci\u00f3n, \u00fatil para los reportes administrativos\"*.\n\nEl motivo es opcional; la fecha no: el servicio siempre la escribe, porque `ck_membership_cancel` exige que `CANCELLED` y `cancelled_on` concuerden en ambos sentidos.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cancellation_reason\": \"COST\",\n  \"notes\": \"Cancelacion registrada desde la coleccion.\"\n}"
@@ -4282,7 +4282,7 @@
                 "cancellations"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** `CANCELLED` es un estado **terminal**: el enunciado lo llama definitivo, así que no hay transición que salga de él.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_CANCELLED` | 409 | El contrato ya estaba cancelado. |",
+            "description": "**Administrador, recepcionista y socio.** `CANCELLED` es un estado **terminal**: el enunciado lo llama definitivo, as\u00ed que no hay transici\u00f3n que salga de \u00e9l.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_CANCELLED` | 409 | El contrato ya estaba cancelado. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cancellation_reason\": \"OTHER\"\n}"
@@ -4313,7 +4313,7 @@
     },
     {
       "name": "Access",
-      "description": "Check-in/check-out y pases de invitado (§3.5)",
+      "description": "Check-in/check-out y pases de invitado (\u00a73.5)",
       "item": [
         {
           "name": "Contratar membresia para el acceso",
@@ -5013,7 +5013,7 @@
     },
     {
       "name": "Classes",
-      "description": "Clases grupales (`03-API-REST §3.6`): catálogo recurrente, generación de sesiones fechadas, inscripción con doble validación, límite semanal, lista de espera con prioridad por plan, asistencia y calificación. Es el módulo con más reglas de negocio del sistema.\n\n**El orden de las siete validaciones de una inscripción es fijo** (`02-Modulos §2.6`), y la carpeta las recorre una por una:\n\n| # | Se comprueba | Error |\n|:--:|---|---|\n| 1 | La sesión existe y admite inscripciones | `SESSION_CANCELLED` |\n| 2 | El socio existe y el llamador puede verlo | `MEMBER_NOT_FOUND` · `FORBIDDEN_RESOURCE` |\n| 3 | Su membresía está vigente | `MEMBERSHIP_NOT_ACTIVE` · `MEMBERSHIP_FROZEN` |\n| 4 | Su plan incluye clases grupales | `PLAN_BENEFIT_NOT_INCLUDED` |\n| 5 | No está ya inscrito | `ALREADY_ENROLLED` |\n| 6 | No agotó el límite semanal de su plan | `WEEKLY_LIMIT_REACHED` |\n| 7 | Queda cupo | `SEAT_UNAVAILABLE` |\n\n**El cupo ocupado no se almacena nunca** (`04-Base-de-Datos §6`). Se calcula como las inscripciones no canceladas **más** las reservas de lista de espera todavía dentro de su plazo: cuando alguien cancela, el lugar liberado queda apartado para el primero de la cola durante `gym.classes.waitlist-confirmation-minutes` y sigue contando como ocupado.\n\n**El límite semanal se cuenta sobre la semana de la sesión pedida**, de lunes a domingo, no sobre la de hoy: inscribirse el domingo a la clase del martes consume la semana siguiente.\n\n**Fixtures propias, como en Access.** La carpeta da de alta sus cuatro socios y contrata sus planes, así que no depende del estado en que las carpetas anteriores dejaron al suyo. Lo único que reutiliza es `{{trainer_id}}`, que deja **Employees**.\n\n**Dos peticiones se omiten solas.** `POST /class-sessions/{id}/ratings` y `POST /waitlist-entries/{id}/confirmations` son exclusivas del rol socio, y toda cuenta creada con `POST /users` nace con doble factor. Para ejecutarlas hay que leer el código del log y ponerlo en `classes_verification_code`, igual que en **Auth › Verificar reto (2FA)**.",
+      "description": "Clases grupales (`03-API-REST \u00a73.6`): cat\u00e1logo recurrente, generaci\u00f3n de sesiones fechadas, inscripci\u00f3n con doble validaci\u00f3n, l\u00edmite semanal, lista de espera con prioridad por plan, asistencia y calificaci\u00f3n. Es el m\u00f3dulo con m\u00e1s reglas de negocio del sistema.\n\n**El orden de las siete validaciones de una inscripci\u00f3n es fijo** (`02-Modulos \u00a72.6`), y la carpeta las recorre una por una:\n\n| # | Se comprueba | Error |\n|:--:|---|---|\n| 1 | La sesi\u00f3n existe y admite inscripciones | `SESSION_CANCELLED` |\n| 2 | El socio existe y el llamador puede verlo | `MEMBER_NOT_FOUND` \u00b7 `FORBIDDEN_RESOURCE` |\n| 3 | Su membres\u00eda est\u00e1 vigente | `MEMBERSHIP_NOT_ACTIVE` \u00b7 `MEMBERSHIP_FROZEN` |\n| 4 | Su plan incluye clases grupales | `PLAN_BENEFIT_NOT_INCLUDED` |\n| 5 | No est\u00e1 ya inscrito | `ALREADY_ENROLLED` |\n| 6 | No agot\u00f3 el l\u00edmite semanal de su plan | `WEEKLY_LIMIT_REACHED` |\n| 7 | Queda cupo | `SEAT_UNAVAILABLE` |\n\n**El cupo ocupado no se almacena nunca** (`04-Base-de-Datos \u00a76`). Se calcula como las inscripciones no canceladas **m\u00e1s** las reservas de lista de espera todav\u00eda dentro de su plazo: cuando alguien cancela, el lugar liberado queda apartado para el primero de la cola durante `gym.classes.waitlist-confirmation-minutes` y sigue contando como ocupado.\n\n**El l\u00edmite semanal se cuenta sobre la semana de la sesi\u00f3n pedida**, de lunes a domingo, no sobre la de hoy: inscribirse el domingo a la clase del martes consume la semana siguiente.\n\n**Fixtures propias, como en Access.** La carpeta da de alta sus cuatro socios y contrata sus planes, as\u00ed que no depende del estado en que las carpetas anteriores dejaron al suyo. Lo \u00fanico que reutiliza es `{{trainer_id}}`, que deja **Employees**.\n\n**Dos peticiones se omiten solas.** `POST /class-sessions/{id}/ratings` y `POST /waitlist-entries/{id}/confirmations` son exclusivas del rol socio, y toda cuenta creada con `POST /users` nace con doble factor. Para ejecutarlas hay que leer el c\u00f3digo del log y ponerlo en `classes_verification_code`, igual que en **Auth \u203a Verificar reto (2FA)**.",
       "item": [
         {
           "name": "Planes para las clases",
@@ -5039,7 +5039,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** Resuelve los tres planes sembrados por `data.sql` por su código, porque las reglas de esta carpeta dependen del beneficio y del límite de cada uno: `BASIC` no incluye clases, `PREMIUM` permite 3 por semana y `ELITE` es ilimitado y encabeza la lista de espera."
+            "description": "**Todos los roles.** Resuelve los tres planes sembrados por `data.sql` por su c\u00f3digo, porque las reglas de esta carpeta dependen del beneficio y del l\u00edmite de cada uno: `BASIC` no incluye clases, `PREMIUM` permite 3 por semana y `ELITE` es ilimitado y encabeza la lista de espera."
           },
           "event": [
             {
@@ -5088,7 +5088,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: as\u00ed el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{classes_document}}\",\n    \"first_name\": \"Clases\",\n    \"last_name\": \"Ramirez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{classes_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
@@ -5146,7 +5146,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: as\u00ed el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{second_document}}\",\n    \"first_name\": \"Socio\",\n    \"last_name\": \"Morales\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{second_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
@@ -5204,7 +5204,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: as\u00ed el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{waitlist_document}}\",\n    \"first_name\": \"Elite\",\n    \"last_name\": \"Castillo\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{waitlist_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
@@ -5262,7 +5262,7 @@
                 "members"
               ]
             },
-            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: as\u00ed el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{basic_document}}\",\n    \"first_name\": \"Basico\",\n    \"last_name\": \"Herrera\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{basic_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
@@ -5320,7 +5320,7 @@
                 "users"
               ]
             },
-            "description": "**Administrador.** Credenciales para el segundo socio. Son las que firman las dos rutas que solo el socio (`S`) puede llamar: **Confirmar el cupo liberado** y **Calificar la clase**.\n\nToda cuenta creada aquí nace con doble factor encendido, así que el token se obtiene en dos pasos y el código hay que leerlo del log. Las peticiones que lo necesitan se omiten solas si no está.",
+            "description": "**Administrador.** Credenciales para el segundo socio. Son las que firman las dos rutas que solo el socio (`S`) puede llamar: **Confirmar el cupo liberado** y **Calificar la clase**.\n\nToda cuenta creada aqu\u00ed nace con doble factor encendido, as\u00ed que el token se obtiene en dos pasos y el c\u00f3digo hay que leerlo del log. Las peticiones que lo necesitan se omiten solas si no est\u00e1.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"person_id\": \"{{second_person_id}}\",\n  \"username\": \"{{classes_username}}\",\n  \"password\": \"{{classes_password}}\",\n  \"role\": \"MEMBER\"\n}"
@@ -5372,7 +5372,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripci\u00f3n responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validaci\u00f3n de `02-Modulos \u00a72.6` pone la membres\u00eda por delante de la clase.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}},\n  \"membership_plan_id\": {{premium_plan_id}}\n}"
@@ -5416,7 +5416,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripci\u00f3n responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validaci\u00f3n de `02-Modulos \u00a72.6` pone la membres\u00eda por delante de la clase.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{second_member_id}},\n  \"membership_plan_id\": {{premium_plan_id}}\n}"
@@ -5457,7 +5457,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripci\u00f3n responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validaci\u00f3n de `02-Modulos \u00a72.6` pone la membres\u00eda por delante de la clase.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{waitlist_member_id}},\n  \"membership_plan_id\": {{elite_plan_id}}\n}"
@@ -5498,7 +5498,7 @@
                 "memberships"
               ]
             },
-            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripci\u00f3n responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validaci\u00f3n de `02-Modulos \u00a72.6` pone la membres\u00eda por delante de la clase.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{basic_member_id}},\n  \"membership_plan_id\": {{basic_plan_id}}\n}"
@@ -5539,7 +5539,7 @@
                 "group-classes"
               ]
             },
-            "description": "**Administrador.** «El administrador crea las clases grupales definiendo: nombre de la clase, entrenador a cargo, horario, duración y cupo máximo» (enunciado).\n\nLa clase es la **definición recurrente**, no una fecha: `weekday` y `start_time` describen el hueco semanal y las ocurrencias fechadas las crea **Generar sesiones del rango**. El cupo es de 2 a propósito, para poder llenarlo y provocar `SEAT_UNAVAILABLE` en tres peticiones.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_NOT_FOUND` | 404 | El entrenador no existe. |\n| `VALIDATION_ERROR` | 400 | El código ya está en uso. |",
+            "description": "**Administrador.** \u00abEl administrador crea las clases grupales definiendo: nombre de la clase, entrenador a cargo, horario, duraci\u00f3n y cupo m\u00e1ximo\u00bb (enunciado).\n\nLa clase es la **definici\u00f3n recurrente**, no una fecha: `weekday` y `start_time` describen el hueco semanal y las ocurrencias fechadas las crea **Generar sesiones del rango**. El cupo es de 2 a prop\u00f3sito, para poder llenarlo y provocar `SEAT_UNAVAILABLE` en tres peticiones.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRAINER_NOT_FOUND` | 404 | El entrenador no existe. |\n| `VALIDATION_ERROR` | 400 | El c\u00f3digo ya est\u00e1 en uso. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga matutino\",\n  \"discipline\": \"YOGA\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"MONDAY\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 2\n}"
@@ -5604,7 +5604,7 @@
                 "group-classes"
               ]
             },
-            "description": "**Administrador.** `uq_group_class_code` dice lo mismo en la base, pero el servicio responde un código de negocio en lugar de una violación de restricción.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Ya existe una clase con ese código. |",
+            "description": "**Administrador.** `uq_group_class_code` dice lo mismo en la base, pero el servicio responde un c\u00f3digo de negocio en lugar de una violaci\u00f3n de restricci\u00f3n.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Ya existe una clase con ese c\u00f3digo. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga repetido\",\n  \"discipline\": \"YOGA\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"FRIDAY\",\n  \"start_time\": \"20:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 10\n}"
@@ -5661,7 +5661,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** Catálogo y clases a cargo de un entrenador. Filtros: `discipline`, `trainer_id`, `difficulty_level` y `active`, todos opcionales y combinables en una sola consulta."
+            "description": "**Todos los roles.** Cat\u00e1logo y clases a cargo de un entrenador. Filtros: `discipline`, `trainer_id`, `difficulty_level` y `active`, todos opcionales y combinables en una sola consulta."
           },
           "event": [
             {
@@ -5698,7 +5698,7 @@
                 "{{group_class_id}}"
               ]
             },
-            "description": "**Todos los roles.** La definición recurrente completa.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
+            "description": "**Todos los roles.** La definici\u00f3n recurrente completa.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
           },
           "event": [
             {
@@ -5739,7 +5739,7 @@
                 "{{group_class_id}}"
               ]
             },
-            "description": "**Administrador.** Modifica la definición. El cambio afecta a las sesiones que se generen **después**: las ya generadas llevan su propia copia de entrenador, hora y cupo, porque `§3.6` permite reprogramar una fecha suelta sin tocar la clase.",
+            "description": "**Administrador.** Modifica la definici\u00f3n. El cambio afecta a las sesiones que se generen **despu\u00e9s**: las ya generadas llevan su propia copia de entrenador, hora y cupo, porque `\u00a73.6` permite reprogramar una fecha suelta sin tocar la clase.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga matutino intermedio\",\n  \"discipline\": \"YOGA\",\n  \"difficulty_level\": \"INTERMEDIATE\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"MONDAY\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 2\n}"
@@ -5787,7 +5787,7 @@
                 "sessions"
               ]
             },
-            "description": "**Administrador.** Crea una `class_session` por cada fecha del rango cuyo día de la semana sea el de la clase, copiando entrenador, hora y cupo. El rango va del próximo lunes al siguiente, así que salen **dos** sesiones, ambas en el futuro: sin eso el margen de cancelación de dos horas ya estaría vencido.",
+            "description": "**Administrador.** Crea una `class_session` por cada fecha del rango cuyo d\u00eda de la semana sea el de la clase, copiando entrenador, hora y cupo. El rango va del pr\u00f3ximo lunes al siguiente, as\u00ed que salen **dos** sesiones, ambas en el futuro: sin eso el margen de cancelaci\u00f3n de dos horas ya estar\u00eda vencido.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"from\": \"{{session_from}}\",\n  \"to\": \"{{session_to}}\"\n}"
@@ -5865,7 +5865,7 @@
                 "sessions"
               ]
             },
-            "description": "**Administrador.** `uq_session_date` impide dos sesiones de la misma clase el mismo día. Las fechas que ya tienen sesión se omiten en lugar de reventar el lote entero, así que repetir la generación es inofensivo y la respuesta viene vacía.",
+            "description": "**Administrador.** `uq_session_date` impide dos sesiones de la misma clase el mismo d\u00eda. Las fechas que ya tienen sesi\u00f3n se omiten en lugar de reventar el lote entero, as\u00ed que repetir la generaci\u00f3n es inofensivo y la respuesta viene vac\u00eda.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"from\": \"{{session_from}}\",\n  \"to\": \"{{session_to}}\"\n}"
@@ -5981,7 +5981,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** La cartelera y, con `trainer_id`, la agenda del entrenador. Filtros: `from`, `to`, `discipline`, `trainer_id`, `group_class_id` y `has_seats`.\n\n`seats_taken` y `seats_available` van **calculados**, nunca almacenados (`04-Base-de-Datos §6`): son las inscripciones no canceladas más las reservas de lista de espera todavía vigentes."
+            "description": "**Todos los roles.** La cartelera y, con `trainer_id`, la agenda del entrenador. Filtros: `from`, `to`, `discipline`, `trainer_id`, `group_class_id` y `has_seats`.\n\n`seats_taken` y `seats_available` van **calculados**, nunca almacenados (`04-Base-de-Datos \u00a76`): son las inscripciones no canceladas m\u00e1s las reservas de lista de espera todav\u00eda vigentes."
           },
           "event": [
             {
@@ -6019,7 +6019,7 @@
                 "{{class_session_id}}"
               ]
             },
-            "description": "**Todos los roles.** Detalle de una ocurrencia con sus cupos.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `CLASS_SESSION_NOT_FOUND` | 404 | La sesión no existe. |"
+            "description": "**Todos los roles.** Detalle de una ocurrencia con sus cupos.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `CLASS_SESSION_NOT_FOUND` | 404 | La sesi\u00f3n no existe. |"
           },
           "event": [
             {
@@ -6063,7 +6063,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Las cinco validaciones de `02-Modulos §2.6` corren en orden fijo: sesión disponible → socio → membresía vigente → beneficio del plan → inscripción previa → límite semanal → cupo. El orden importa: un socio del plan Básico recibe `PLAN_BENEFIT_NOT_INCLUDED` aunque la clase esté llena, porque el beneficio se mira antes que el cupo.\n\n`channel` es opcional y vale `SELF_SERVICE`; el recepcionista manda `FRONT_DESK` cuando inscribe en mostrador.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_NOT_ACTIVE` · `MEMBERSHIP_FROZEN` | 409 | El contrato no está vigente. |\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en esta sesión. |\n| `WEEKLY_LIMIT_REACHED` | 409 | Ya consumió las clases de la semana. |\n| `SEAT_UNAVAILABLE` | 409 | No queda cupo; puede unirse a la lista de espera. |",
+            "description": "**Administrador, recepcionista y socio.** Las cinco validaciones de `02-Modulos \u00a72.6` corren en orden fijo: sesi\u00f3n disponible \u2192 socio \u2192 membres\u00eda vigente \u2192 beneficio del plan \u2192 inscripci\u00f3n previa \u2192 l\u00edmite semanal \u2192 cupo. El orden importa: un socio del plan B\u00e1sico recibe `PLAN_BENEFIT_NOT_INCLUDED` aunque la clase est\u00e9 llena, porque el beneficio se mira antes que el cupo.\n\n`channel` es opcional y vale `SELF_SERVICE`; el recepcionista manda `FRONT_DESK` cuando inscribe en mostrador.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `MEMBERSHIP_NOT_ACTIVE` \u00b7 `MEMBERSHIP_FROZEN` | 409 | El contrato no est\u00e1 vigente. |\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |\n| `ALREADY_ENROLLED` | 409 | Ya est\u00e1 inscrito en esta sesi\u00f3n. |\n| `WEEKLY_LIMIT_REACHED` | 409 | Ya consumi\u00f3 las clases de la semana. |\n| `SEAT_UNAVAILABLE` | 409 | No queda cupo; puede unirse a la lista de espera. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}},\n  \"channel\": \"FRONT_DESK\"\n}"
@@ -6116,7 +6116,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial, así que la segunda inscripción se responde con un código de negocio antes de llegar a la base.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en esta sesión. |",
+            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial, as\u00ed que la segunda inscripci\u00f3n se responde con un c\u00f3digo de negocio antes de llegar a la base.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya est\u00e1 inscrito en esta sesi\u00f3n. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
@@ -6162,7 +6162,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** «Solo los socios con plan Premium o Élite pueden inscribirse» (enunciado). El plan Básico no trae el beneficio, y la respuesta sugiere `UPGRADE_PLAN` para que la interfaz ofrezca el botón correcto.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |",
+            "description": "**Administrador, recepcionista y socio.** \u00abSolo los socios con plan Premium o \u00c9lite pueden inscribirse\u00bb (enunciado). El plan B\u00e1sico no trae el beneficio, y la respuesta sugiere `UPGRADE_PLAN` para que la interfaz ofrezca el bot\u00f3n correcto.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{basic_member_id}}\n}"
@@ -6211,7 +6211,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Con esta inscripción la sesión llega a su cupo de 2 y las siguientes tienen que ir a la lista de espera.",
+            "description": "**Administrador, recepcionista y socio.** Con esta inscripci\u00f3n la sesi\u00f3n llega a su cupo de 2 y las siguientes tienen que ir a la lista de espera.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{second_member_id}}\n}"
@@ -6260,7 +6260,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** El roster de la sesión, que es también la lista sobre la que el entrenador marca asistencia."
+            "description": "**Administrador, recepcionista y entrenador.** El roster de la sesi\u00f3n, que es tambi\u00e9n la lista sobre la que el entrenador marca asistencia."
           },
           "event": [
             {
@@ -6321,7 +6321,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** `has_seats=true` deja fuera las sesiones llenas. La sesión de esta carpeta ya agotó sus dos lugares, así que no aparece; la del lunes siguiente sí."
+            "description": "**Todos los roles.** `has_seats=true` deja fuera las sesiones llenas. La sesi\u00f3n de esta carpeta ya agot\u00f3 sus dos lugares, as\u00ed que no aparece; la del lunes siguiente s\u00ed."
           },
           "event": [
             {
@@ -6364,7 +6364,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** «Si no hay cupo, responde `409 SEAT_UNAVAILABLE` indicando que puede unirse a la lista de espera» (`§3.6`): eso es lo que dice `suggested_action`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SEAT_UNAVAILABLE` | 409 | La clase alcanzó su cupo máximo. |",
+            "description": "**Administrador, recepcionista y socio.** \u00abSi no hay cupo, responde `409 SEAT_UNAVAILABLE` indicando que puede unirse a la lista de espera\u00bb (`\u00a73.6`): eso es lo que dice `suggested_action`.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `SEAT_UNAVAILABLE` | 409 | La clase alcanz\u00f3 su cupo m\u00e1ximo. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
@@ -6413,7 +6413,7 @@
                 "waitlist-entries"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Solo se entra a la cola si la sesión está llena: con cupo libre el socio debe inscribirse. Valida membresía y beneficio igual que la inscripción.\n\nQuien se une aquí es el socio **Élite**, y lo hace **después** del socio Premium de la petición siguiente, para que la promoción tenga que elegir por plan y no por hora.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en la sesión. |\n| `ALREADY_IN_WAITLIST` | 409 | Ya está en la cola. |\n| `VALIDATION_ERROR` | 400 | La sesión todavía tiene cupo. |",
+            "description": "**Administrador, recepcionista y socio.** Solo se entra a la cola si la sesi\u00f3n est\u00e1 llena: con cupo libre el socio debe inscribirse. Valida membres\u00eda y beneficio igual que la inscripci\u00f3n.\n\nQuien se une aqu\u00ed es el socio **\u00c9lite**, y lo hace **despu\u00e9s** del socio Premium de la petici\u00f3n siguiente, para que la promoci\u00f3n tenga que elegir por plan y no por hora.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya est\u00e1 inscrito en la sesi\u00f3n. |\n| `ALREADY_IN_WAITLIST` | 409 | Ya est\u00e1 en la cola. |\n| `VALIDATION_ERROR` | 400 | La sesi\u00f3n todav\u00eda tiene cupo. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
@@ -6465,7 +6465,7 @@
                 "waitlist-entries"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** `uq_waitlist_member` tampoco lleva predicado parcial.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_IN_WAITLIST` | 409 | Ya está en la lista de espera de esta sesión. |",
+            "description": "**Administrador, recepcionista y socio.** `uq_waitlist_member` tampoco lleva predicado parcial.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `ALREADY_IN_WAITLIST` | 409 | Ya est\u00e1 en la lista de espera de esta sesi\u00f3n. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
@@ -6516,7 +6516,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** «Cola de espera, ya ordenada por prioridad de plan y hora de solicitud» (`§3.6`).\n\nNo hay columna de posición: el orden se deriva del `tier` del plan vigente y, a igualdad de plan, de `requested_at`. Así nunca se desordena cuando alguien abandona la cola o cambia de plan."
+            "description": "**Administrador, recepcionista y entrenador.** \u00abCola de espera, ya ordenada por prioridad de plan y hora de solicitud\u00bb (`\u00a73.6`).\n\nNo hay columna de posici\u00f3n: el orden se deriva del `tier` del plan vigente y, a igualdad de plan, de `requested_at`. As\u00ed nunca se desordena cuando alguien abandona la cola o cambia de plan."
           },
           "event": [
             {
@@ -6553,7 +6553,7 @@
                 "{{enrollment_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** «Cancela la inscripción. Si está dentro del margen de anticipación, libera el cupo y promueve al primero de la lista de espera» (`§3.6`). El margen es `gym.classes.cancellation-window-hours`, dos horas.\n\nEl cupo liberado **queda reservado** para el promovido durante `gym.classes.waitlist-confirmation-minutes`, así que sigue contando como ocupado: sin eso, `WAITLIST_CONFIRMATION_EXPIRED` no querría decir nada.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | La inscripción no existe. |\n| `CANCELLATION_WINDOW_CLOSED` | 409 | Faltan menos de dos horas para la clase. |\n| `INVALID_STATE_TRANSITION` | 409 | La inscripción ya no está `ENROLLED`. |"
+            "description": "**Administrador, recepcionista y socio.** \u00abCancela la inscripci\u00f3n. Si est\u00e1 dentro del margen de anticipaci\u00f3n, libera el cupo y promueve al primero de la lista de espera\u00bb (`\u00a73.6`). El margen es `gym.classes.cancellation-window-hours`, dos horas.\n\nEl cupo liberado **queda reservado** para el promovido durante `gym.classes.waitlist-confirmation-minutes`, as\u00ed que sigue contando como ocupado: sin eso, `WAITLIST_CONFIRMATION_EXPIRED` no querr\u00eda decir nada.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | La inscripci\u00f3n no existe. |\n| `CANCELLATION_WINDOW_CLOSED` | 409 | Faltan menos de dos horas para la clase. |\n| `INVALID_STATE_TRANSITION` | 409 | La inscripci\u00f3n ya no est\u00e1 `ENROLLED`. |"
           },
           "event": [
             {
@@ -6596,7 +6596,7 @@
                 }
               ]
             },
-            "description": "**Administrador, recepcionista y entrenador.** «Dándole prioridad a los socios con Plan Élite» (enunciado): el socio Élite pidió **después** que el Premium y aun así es el que queda `NOTIFIED`, con su `confirmation_deadline` en marcha."
+            "description": "**Administrador, recepcionista y entrenador.** \u00abD\u00e1ndole prioridad a los socios con Plan \u00c9lite\u00bb (enunciado): el socio \u00c9lite pidi\u00f3 **despu\u00e9s** que el Premium y aun as\u00ed es el que queda `NOTIFIED`, con su `confirmation_deadline` en marcha."
           },
           "event": [
             {
@@ -6636,7 +6636,7 @@
                 "{{class_session_id}}"
               ]
             },
-            "description": "**Todos los roles.** La reserva viva cuenta como cupo ocupado: la sesión sigue llena aunque una inscripción se haya cancelado. Es lo que impide que otro socio se cuele en el lugar que ya se le prometió al primero de la cola."
+            "description": "**Todos los roles.** La reserva viva cuenta como cupo ocupado: la sesi\u00f3n sigue llena aunque una inscripci\u00f3n se haya cancelado. Es lo que impide que otro socio se cuele en el lugar que ya se le prometi\u00f3 al primero de la cola."
           },
           "event": [
             {
@@ -6677,7 +6677,7 @@
                 "login"
               ]
             },
-            "description": "**Público.** Las dos rutas que solo el socio puede llamar necesitan su token. La cuenta nació con doble factor, así que este login responde `202` con un reto y el código de seis dígitos sale por correo o, si `MAIL_USERNAME` está vacío, al log:\n\n```bash\ndocker logs fitness_backend | grep -i verification\n```\n\nCópialo en la variable `classes_verification_code` y ejecuta la petición siguiente.",
+            "description": "**P\u00fablico.** Las dos rutas que solo el socio puede llamar necesitan su token. La cuenta naci\u00f3 con doble factor, as\u00ed que este login responde `202` con un reto y el c\u00f3digo de seis d\u00edgitos sale por correo o, si `MAIL_USERNAME` est\u00e1 vac\u00edo, al log:\n\n```bash\ndocker logs fitness_backend | grep -i verification\n```\n\nC\u00f3pialo en la variable `classes_verification_code` y ejecuta la petici\u00f3n siguiente.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"username\": \"{{classes_username}}\",\n  \"password\": \"{{classes_password}}\"\n}"
@@ -6732,7 +6732,7 @@
                 "verifications"
               ]
             },
-            "description": "**Público.** Canjea el código por el token del socio. Se omite sola mientras `classes_verification_code` esté vacía, así que la colección corre completa sin intervención: lo que queda sin ejecutar son las dos peticiones de rol `S`.",
+            "description": "**P\u00fablico.** Canjea el c\u00f3digo por el token del socio. Se omite sola mientras `classes_verification_code` est\u00e9 vac\u00eda, as\u00ed que la colecci\u00f3n corre completa sin intervenci\u00f3n: lo que queda sin ejecutar son las dos peticiones de rol `S`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"{{classes_verification_code}}\"\n}"
@@ -6796,7 +6796,7 @@
                 "confirmations"
               ]
             },
-            "description": "**Solo el socio.** «Confirma el cupo liberado dentro de la ventana de confirmación» (`§3.6`). La entrada pasa a `PROMOTED` y nace la inscripción; fuera de la ventana la reserva ya caducó y el cupo se le ofreció al siguiente de la cola.\n\nFirma con `classes_member_token`. Ojo: la reserva es del socio **Élite** y el token es del **segundo socio**, así que aquí se comprueba el otro lado de la regla —un socio no toca la fila de otro— y la respuesta esperada es `403 FORBIDDEN_RESOURCE`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `WAITLIST_CONFIRMATION_EXPIRED` | 409 | La reserva caducó o nunca fue notificada. |\n| `FORBIDDEN_RESOURCE` | 403 | La reserva es de otro socio. |",
+            "description": "**Solo el socio.** \u00abConfirma el cupo liberado dentro de la ventana de confirmaci\u00f3n\u00bb (`\u00a73.6`). La entrada pasa a `PROMOTED` y nace la inscripci\u00f3n; fuera de la ventana la reserva ya caduc\u00f3 y el cupo se le ofreci\u00f3 al siguiente de la cola.\n\nFirma con `classes_member_token`. Ojo: la reserva es del socio **\u00c9lite** y el token es del **segundo socio**, as\u00ed que aqu\u00ed se comprueba el otro lado de la regla \u2014un socio no toca la fila de otro\u2014 y la respuesta esperada es `403 FORBIDDEN_RESOURCE`.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `WAITLIST_CONFIRMATION_EXPIRED` | 409 | La reserva caduc\u00f3 o nunca fue notificada. |\n| `FORBIDDEN_RESOURCE` | 403 | La reserva es de otro socio. |",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -6854,7 +6854,7 @@
                 "{{waitlist_entry_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** «Abandona la lista de espera» (`§3.6`). Si quien se va tenía el cupo reservado, ese cupo pasa al siguiente de la cola en el mismo movimiento.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya se resolvió. |"
+            "description": "**Administrador, recepcionista y socio.** \u00abAbandona la lista de espera\u00bb (`\u00a73.6`). Si quien se va ten\u00eda el cupo reservado, ese cupo pasa al siguiente de la cola en el mismo movimiento.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya se resolvi\u00f3. |"
           },
           "event": [
             {
@@ -6886,7 +6886,7 @@
                 "{{waitlist_entry_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Una entrada ya resuelta no se puede abandonar otra vez.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya no está pendiente. |"
+            "description": "**Administrador, recepcionista y socio.** Una entrada ya resuelta no se puede abandonar otra vez.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya no est\u00e1 pendiente. |"
           },
           "event": [
             {
@@ -6928,7 +6928,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** La sesión del lunes siguiente, todavía vacía. Sirve para mostrar que cancelar y volver a inscribirse **reactiva la misma fila** en vez de crear una segunda.",
+            "description": "**Administrador, recepcionista y socio.** La sesi\u00f3n del lunes siguiente, todav\u00eda vac\u00eda. Sirve para mostrar que cancelar y volver a inscribirse **reactiva la misma fila** en vez de crear una segunda.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
@@ -6966,7 +6966,7 @@
                 "{{alt_enrollment_id}}"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Falta más de una semana para esa clase, así que la cancelación cae holgadamente dentro del margen."
+            "description": "**Administrador, recepcionista y socio.** Falta m\u00e1s de una semana para esa clase, as\u00ed que la cancelaci\u00f3n cae holgadamente dentro del margen."
           },
           "event": [
             {
@@ -7004,7 +7004,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial: una fila `CANCELLED` bloquearía el reingreso si se intentara insertar otra. El servicio reactiva la existente —`CANCELLED → ENROLLED`, `cancelled_at` a nulo— y por eso el identificador es el mismo de antes.",
+            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial: una fila `CANCELLED` bloquear\u00eda el reingreso si se intentara insertar otra. El servicio reactiva la existente \u2014`CANCELLED \u2192 ENROLLED`, `cancelled_at` a nulo\u2014 y por eso el identificador es el mismo de antes.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
@@ -7053,7 +7053,7 @@
                 "{{alt_class_session_id}}"
               ]
             },
-            "description": "**Administrador.** «Reprograma: fecha, hora, cupo o entrenador de esa sesión» (`§3.6`).\n\nA nivel de sesión **no hay restricción en la base** —`uq_group_class_slot` solo cuida el hueco semanal de la clase—, así que el choque de agenda del entrenador se comprueba en el servicio, y solo cuando la fecha, la hora o el entrenador cambian de verdad.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_SCHEDULE_CONFLICT` | 409 | El entrenador ya tiene otra clase en ese horario. |\n| `INVALID_STATE_TRANSITION` | 409 | La sesión está cancelada o cerrada. |",
+            "description": "**Administrador.** \u00abReprograma: fecha, hora, cupo o entrenador de esa sesi\u00f3n\u00bb (`\u00a73.6`).\n\nA nivel de sesi\u00f3n **no hay restricci\u00f3n en la base** \u2014`uq_group_class_slot` solo cuida el hueco semanal de la clase\u2014, as\u00ed que el choque de agenda del entrenador se comprueba en el servicio, y solo cuando la fecha, la hora o el entrenador cambian de verdad.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRAINER_SCHEDULE_CONFLICT` | 409 | El entrenador ya tiene otra clase en ese horario. |\n| `INVALID_STATE_TRANSITION` | 409 | La sesi\u00f3n est\u00e1 cancelada o cerrada. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"session_date\": \"{{session_from}}\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"max_capacity\": 2,\n  \"trainer_id\": \"{{trainer_id}}\"\n}"
@@ -7098,7 +7098,7 @@
                 "{{alt_class_session_id}}"
               ]
             },
-            "description": "**Administrador.** El mismo día, una hora más tarde y con dos lugares más. Los inscritos conservan su inscripción y reciben `SESSION_RESCHEDULED` en su bandeja: aparece en **Notifications › Bandeja del socio**.",
+            "description": "**Administrador.** El mismo d\u00eda, una hora m\u00e1s tarde y con dos lugares m\u00e1s. Los inscritos conservan su inscripci\u00f3n y reciben `SESSION_RESCHEDULED` en su bandeja: aparece en **Notifications \u203a Bandeja del socio**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"session_date\": \"{{session_to}}\",\n  \"start_time\": \"21:00\",\n  \"max_capacity\": 4,\n  \"trainer_id\": \"{{trainer_id}}\"\n}"
@@ -7146,7 +7146,7 @@
                 "status"
               ]
             },
-            "description": "**Administrador y entrenador.** Solo hay dos transiciones: `SCHEDULED → IN_PROGRESS` e `IN_PROGRESS → COMPLETED`. `ck_session_closed` dice lo mismo en la base: no puede haber `closed_at` sin `opened_at`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La transición pedida no existe. |\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no está a cargo de la sesión. |",
+            "description": "**Administrador y entrenador.** Solo hay dos transiciones: `SCHEDULED \u2192 IN_PROGRESS` e `IN_PROGRESS \u2192 COMPLETED`. `ck_session_closed` dice lo mismo en la base: no puede haber `closed_at` sin `opened_at`.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La transici\u00f3n pedida no existe. |\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no est\u00e1 a cargo de la sesi\u00f3n. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"COMPLETED\"\n}"
@@ -7192,7 +7192,7 @@
                 "attendances"
               ]
             },
-            "description": "**Administrador y entrenador.** La asistencia solo se marca con la clase abierta o ya cerrada.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SESSION_NOT_OPEN` | 409 | La clase todavía no ha iniciado. |",
+            "description": "**Administrador y entrenador.** La asistencia solo se marca con la clase abierta o ya cerrada.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `SESSION_NOT_OPEN` | 409 | La clase todav\u00eda no ha iniciado. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"attendances\": [\n    { \"enrollment_id\": {{second_enrollment_id}}, \"status\": \"ATTENDED\" }\n  ]\n}"
@@ -7238,7 +7238,7 @@
                 "status"
               ]
             },
-            "description": "**Administrador y entrenador.** «El entrenador inicia (`IN_PROGRESS`) y cierra (`COMPLETED`) su clase» (`§3.6`). Con un token de entrenador, el servicio compara la sesión con las suyas y responde `TRAINER_SCOPE_VIOLATION` si no le corresponde: «puede ver únicamente las clases que le han sido asignadas» es seguridad, no un filtro de interfaz.",
+            "description": "**Administrador y entrenador.** \u00abEl entrenador inicia (`IN_PROGRESS`) y cierra (`COMPLETED`) su clase\u00bb (`\u00a73.6`). Con un token de entrenador, el servicio compara la sesi\u00f3n con las suyas y responde `TRAINER_SCOPE_VIOLATION` si no le corresponde: \u00abpuede ver \u00fanicamente las clases que le han sido asignadas\u00bb es seguridad, no un filtro de interfaz.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}"
@@ -7286,7 +7286,7 @@
                 "attendances"
               ]
             },
-            "description": "**Administrador y entrenador.** «Marca la asistencia de toda la lista en una sola operación» (`§3.6`).\n\nLa asistencia es el **estado de la inscripción** (`ATTENDED` / `ABSENT`), no una tabla aparte (`04-Base-de-Datos §6`). Una inscripción cancelada no se puede marcar: `ck_enroll_cancel` es un si y solo si.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | Alguna inscripción de la lista no existe. |\n| `VALIDATION_ERROR` | 400 | La inscripción es de otra sesión o está cancelada. |",
+            "description": "**Administrador y entrenador.** \u00abMarca la asistencia de toda la lista en una sola operaci\u00f3n\u00bb (`\u00a73.6`).\n\nLa asistencia es el **estado de la inscripci\u00f3n** (`ATTENDED` / `ABSENT`), no una tabla aparte (`04-Base-de-Datos \u00a76`). Una inscripci\u00f3n cancelada no se puede marcar: `ck_enroll_cancel` es un si y solo si.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | Alguna inscripci\u00f3n de la lista no existe. |\n| `VALIDATION_ERROR` | 400 | La inscripci\u00f3n es de otra sesi\u00f3n o est\u00e1 cancelada. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"attendances\": [\n    { \"enrollment_id\": {{second_enrollment_id}}, \"status\": \"ATTENDED\" }\n  ]\n}"
@@ -7334,7 +7334,7 @@
                 "ratings"
               ]
             },
-            "description": "**Solo el socio.** «Califica la clase y al entrenador. Requiere haber asistido» (`§3.6`): se comprueba contra el estado `ATTENDED` de la propia inscripción, nunca contra una bandera aparte.\n\nNo lleva `member_id`: la ruta es exclusiva del socio y quien califica es siempre quien firma el token. Se omite sola si `classes_member_token` está vacía.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `RATING_REQUIRES_ATTENDANCE` | 403 | El socio no asistió a esa sesión. |\n| `INVALID_STATE_TRANSITION` | 409 | Ya calificó esta sesión (`uq_rating_member`). |",
+            "description": "**Solo el socio.** \u00abCalifica la clase y al entrenador. Requiere haber asistido\u00bb (`\u00a73.6`): se comprueba contra el estado `ATTENDED` de la propia inscripci\u00f3n, nunca contra una bandera aparte.\n\nNo lleva `member_id`: la ruta es exclusiva del socio y quien califica es siempre quien firma el token. Se omite sola si `classes_member_token` est\u00e1 vac\u00eda.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `RATING_REQUIRES_ATTENDANCE` | 403 | El socio no asisti\u00f3 a esa sesi\u00f3n. |\n| `INVALID_STATE_TRANSITION` | 409 | Ya calific\u00f3 esta sesi\u00f3n (`uq_rating_member`). |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"class_score\": 5,\n  \"trainer_score\": 4,\n  \"comment\": \"Muy buena clase, el entrenador explico cada postura.\"\n}"
@@ -7406,7 +7406,7 @@
                 "status"
               ]
             },
-            "description": "**Administrador y entrenador.** `IN_PROGRESS → COMPLETED` fija `closed_at`, la segunda y última transición de la máquina de estados.",
+            "description": "**Administrador y entrenador.** `IN_PROGRESS \u2192 COMPLETED` fija `closed_at`, la segunda y \u00faltima transici\u00f3n de la m\u00e1quina de estados.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"COMPLETED\"\n}"
@@ -7459,7 +7459,7 @@
                 }
               ]
             },
-            "description": "**Administrador y entrenador.** «Calificaciones recibidas por la sesión» (`§3.6`). Con un token de entrenador solo llega a las suyas.\n\nViene vacía si **Calificar la clase** se omitió por falta de token del socio.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no está a cargo de la sesión. |"
+            "description": "**Administrador y entrenador.** \u00abCalificaciones recibidas por la sesi\u00f3n\u00bb (`\u00a73.6`). Con un token de entrenador solo llega a las suyas.\n\nViene vac\u00eda si **Calificar la clase** se omiti\u00f3 por falta de token del socio.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no est\u00e1 a cargo de la sesi\u00f3n. |"
           },
           "event": [
             {
@@ -7510,7 +7510,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** «Clases del socio. Filtros: `from`, `to`, `status`» (`§3.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `class_enrollment`: la sirve el módulo `classes`, igual que `membership` sirve `/members/{id}/memberships`. Al revés cerraría un ciclo entre módulos."
+            "description": "**Todos los roles.** \u00abClases del socio. Filtros: `from`, `to`, `status`\u00bb (`\u00a73.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `class_enrollment`: la sirve el m\u00f3dulo `classes`, igual que `membership` sirve `/members/{id}/memberships`. Al rev\u00e9s cerrar\u00eda un ciclo entre m\u00f3dulos."
           },
           "event": [
             {
@@ -7552,7 +7552,7 @@
                 "cancellations"
               ]
             },
-            "description": "**Administrador.** «Cancela la sesión con motivo y notifica a los inscritos» (`§3.6`). El motivo es obligatorio porque `ck_session_cancel` es un si y solo si: `CANCELLED` y `cancellation_reason` van juntos o no van.\n\nLas inscripciones activas se cancelan en bloque en la misma operación, y cada inscrito recibe `SESSION_CANCELLED` por correo. Sin SMTP la fila queda `FAILED` con su motivo y **sigue apareciendo en la bandeja**: el aviso se demuestra igual.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La sesión ya está cerrada o cancelada. |",
+            "description": "**Administrador.** \u00abCancela la sesi\u00f3n con motivo y notifica a los inscritos\u00bb (`\u00a73.6`). El motivo es obligatorio porque `ck_session_cancel` es un si y solo si: `CANCELLED` y `cancellation_reason` van juntos o no van.\n\nLas inscripciones activas se cancelan en bloque en la misma operaci\u00f3n, y cada inscrito recibe `SESSION_CANCELLED` por correo. Sin SMTP la fila queda `FAILED` con su motivo y **sigue apareciendo en la bandeja**: el aviso se demuestra igual.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La sesi\u00f3n ya est\u00e1 cerrada o cancelada. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cancellation_reason\": \"Mantenimiento del salon de yoga.\"\n}"
@@ -7600,7 +7600,7 @@
                 "enrollments"
               ]
             },
-            "description": "**Administrador, recepcionista y socio.** Primera validación de las siete: una sesión cancelada se responde con su propio código y no con el genérico de transición inválida.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SESSION_CANCELLED` | 409 | La sesión fue cancelada. |",
+            "description": "**Administrador, recepcionista y socio.** Primera validaci\u00f3n de las siete: una sesi\u00f3n cancelada se responde con su propio c\u00f3digo y no con el gen\u00e9rico de transici\u00f3n inv\u00e1lida.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `SESSION_CANCELLED` | 409 | La sesi\u00f3n fue cancelada. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
@@ -7640,7 +7640,7 @@
                 "{{group_class_id}}"
               ]
             },
-            "description": "**Administrador.** «Desactiva la clase (baja lógica; no borra el historial)» (`§3.6`). Las sesiones ya generadas y sus inscripciones siguen existiendo: lo que se apaga es la definición recurrente, para que no se generen sesiones nuevas.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
+            "description": "**Administrador.** \u00abDesactiva la clase (baja l\u00f3gica; no borra el historial)\u00bb (`\u00a73.6`). Las sesiones ya generadas y sus inscripciones siguen existiendo: lo que se apaga es la definici\u00f3n recurrente, para que no se generen sesiones nuevas.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
           },
           "event": [
             {
@@ -7671,7 +7671,7 @@
                 "class-sessions"
               ]
             },
-            "description": "**Sin credenciales.** Ninguna ruta de clases es pública: sin token la respuesta es `401` con el cuerpo de error de siempre.",
+            "description": "**Sin credenciales.** Ninguna ruta de clases es p\u00fablica: sin token la respuesta es `401` con el cuerpo de error de siempre.",
             "auth": {
               "type": "noauth"
             }
@@ -7722,7 +7722,7 @@
                 {
                   "key": "size",
                   "value": "20",
-                  "description": "Por defecto 20, máximo 100."
+                  "description": "Por defecto 20, m\u00e1ximo 100."
                 },
                 {
                   "key": "sort",
@@ -7731,7 +7731,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** «Bandeja del usuario autenticado» (`§3.9`). **No hay identificador de usuario en la ruta**: la bandeja es siempre la de quien firma, así que el alcance es el token y no un parámetro que se pueda cambiar.\n\nFirma con `classes_member_token`, el socio que pasó por **Classes**: sus avisos los dejaron la reprogramación y la cancelación de sesiones de esa carpeta.\n\n**Toda notificación es una fila**, sea cual sea el canal. `channel` solo dice cómo se intentó entregar: `IN_APP` nace `SENT`, y `EMAIL` queda `FAILED` con su `failure_reason` si no hay SMTP configurado. Por eso el flujo se demuestra completo sin servidor de correo.",
+            "description": "**Todos los roles.** \u00abBandeja del usuario autenticado\u00bb (`\u00a73.9`). **No hay identificador de usuario en la ruta**: la bandeja es siempre la de quien firma, as\u00ed que el alcance es el token y no un par\u00e1metro que se pueda cambiar.\n\nFirma con `classes_member_token`, el socio que pas\u00f3 por **Classes**: sus avisos los dejaron la reprogramaci\u00f3n y la cancelaci\u00f3n de sesiones de esa carpeta.\n\n**Toda notificaci\u00f3n es una fila**, sea cual sea el canal. `channel` solo dice c\u00f3mo se intent\u00f3 entregar: `IN_APP` nace `SENT`, y `EMAIL` queda `FAILED` con su `failure_reason` si no hay SMTP configurado. Por eso el flujo se demuestra completo sin servidor de correo.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -7814,7 +7814,7 @@
                 }
               ]
             },
-            "description": "**Todos los roles.** El filtro `status` de `§3.9`, sobre la misma bandeja.\n\n`SENT` son los avisos entregados y todavía sin leer. `FAILED` es el otro filtro útil sin SMTP: ahí aparecen los correos formales —vencimiento y cupo liberado— con el motivo por el que no salieron.",
+            "description": "**Todos los roles.** El filtro `status` de `\u00a73.9`, sobre la misma bandeja.\n\n`SENT` son los avisos entregados y todav\u00eda sin leer. `FAILED` es el otro filtro \u00fatil sin SMTP: ah\u00ed aparecen los correos formales \u2014vencimiento y cupo liberado\u2014 con el motivo por el que no salieron.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -7878,7 +7878,7 @@
                 "status"
               ]
             },
-            "description": "**Todos los roles.** «Marca una notificación como leída» (`§3.9`). Sella `read_at`, que es lo que separa un aviso leído de uno entregado.\n\nLeer dos veces no es un error, pero la primera marca de tiempo es la que cuenta: no se reescribe.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El destino no es `READ`. |\n| `FORBIDDEN_RESOURCE` | 403 | La notificación es de otro usuario. |\n| `NOTIFICATION_NOT_FOUND` | 404 | La notificación no existe. |",
+            "description": "**Todos los roles.** \u00abMarca una notificaci\u00f3n como le\u00edda\u00bb (`\u00a73.9`). Sella `read_at`, que es lo que separa un aviso le\u00eddo de uno entregado.\n\nLeer dos veces no es un error, pero la primera marca de tiempo es la que cuenta: no se reescribe.\n\n| Error | HTTP | Cu\u00e1ndo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El destino no es `READ`. |\n| `FORBIDDEN_RESOURCE` | 403 | La notificaci\u00f3n es de otro usuario. |\n| `NOTIFICATION_NOT_FOUND` | 404 | La notificaci\u00f3n no existe. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"READ\"\n}"
@@ -7953,7 +7953,7 @@
                 "status"
               ]
             },
-            "description": "**Todos los roles.** `READ` es el único destino que la API acepta. `PENDING`, `SENT` y `FAILED` son estados de entrega: los escribe el servidor cuando intenta el envío, y dejarlos abiertos permitiría al cliente decir que un correo se envió.",
+            "description": "**Todos los roles.** `READ` es el \u00fanico destino que la API acepta. `PENDING`, `SENT` y `FAILED` son estados de entrega: los escribe el servidor cuando intenta el env\u00edo, y dejarlos abiertos permitir\u00eda al cliente decir que un correo se envi\u00f3.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"SENT\"\n}"
@@ -8022,7 +8022,7 @@
                 "status"
               ]
             },
-            "description": "**Administrador.** La misma notificación del socio, firmada con el token del administrador. El listado no necesita comprobar propiedad —siempre devuelve la bandeja de quien firma— pero el `PATCH` sí, porque el identificador llega en la ruta.\n\nNingún rol es excepción: una bandeja no se lee ni se marca desde otra cuenta.",
+            "description": "**Administrador.** La misma notificaci\u00f3n del socio, firmada con el token del administrador. El listado no necesita comprobar propiedad \u2014siempre devuelve la bandeja de quien firma\u2014 pero el `PATCH` s\u00ed, porque el identificador llega en la ruta.\n\nNing\u00fan rol es excepci\u00f3n: una bandeja no se lee ni se marca desde otra cuenta.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"READ\"\n}"
@@ -8077,7 +8077,7 @@
                 "status"
               ]
             },
-            "description": "**Todos los roles.** Un identificador que no existe responde `404` antes de mirar de quién es: el orden importa poco aquí porque ninguna de las dos respuestas revela nada.",
+            "description": "**Todos los roles.** Un identificador que no existe responde `404` antes de mirar de qui\u00e9n es: el orden importa poco aqu\u00ed porque ninguna de las dos respuestas revela nada.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"READ\"\n}"
@@ -8113,7 +8113,7 @@
                 "notifications"
               ]
             },
-            "description": "**Sin autenticación.** La bandeja se define por el token, así que sin token no hay bandeja que devolver: `401 UNAUTHENTICATED`.",
+            "description": "**Sin autenticaci\u00f3n.** La bandeja se define por el token, as\u00ed que sin token no hay bandeja que devolver: `401 UNAUTHENTICATED`.",
             "auth": {
               "type": "noauth"
             }
@@ -8135,7 +8135,411 @@
           "response": []
         }
       ],
-      "description": "Bandeja de avisos del usuario autenticado. Las notificaciones no se crean desde aquí: las emiten los módulos cuando ocurre el hecho —congelar, reprogramar, cancelar, liberar un cupo, transferir una cartera— y las dos tareas programadas de `membership` a las 00:05 y a las 07:00.\n\nPor eso esta carpeta va al final: **corre después de Classes**, que es lo que llena la bandeja del socio."
+      "description": "Bandeja de avisos del usuario autenticado. Las notificaciones no se crean desde aqu\u00ed: las emiten los m\u00f3dulos cuando ocurre el hecho \u2014congelar, reprogramar, cancelar, liberar un cupo, transferir una cartera\u2014 y las dos tareas programadas de `membership` a las 00:05 y a las 07:00.\n\nPor eso esta carpeta va al final: **corre despu\u00e9s de Classes**, que es lo que llena la bandeja del socio."
+    },
+    {
+      "name": "Reports",
+      "description": "Admin-only read-only endpoints for revenue, membership, attendance, and performance reports. All endpoints support format=json|csv (default: json).",
+      "item": [
+        {
+          "name": "Revenue (JSON)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=MONTH",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "revenue"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "group_by",
+                  "value": "MONTH",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revenue (CSV)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=MONTH&format=csv",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "revenue"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "group_by",
+                  "value": "MONTH",
+                  "disabled": false
+                },
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Memberships Expiring",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/memberships?status=ACTIVE",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "memberships"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Member Distribution",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-distribution",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-distribution"
+              ],
+              "query": []
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Class Attendance",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/class-attendance?from=2026-01-01&to=2026-12-31",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "class-attendance"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Class Demand",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/class-demand?from=2026-01-01&to=2026-12-31",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "class-demand"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Trainer Load",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/trainer-load",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "trainer-load"
+              ],
+              "query": []
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Member Progress",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-progress?member_id=1",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-progress"
+              ],
+              "query": [
+                {
+                  "key": "member_id",
+                  "value": "1",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guest Pass Usage",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/guest-passes?from=2026-01-01&to=2026-12-31",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "guest-passes"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Nutrition Adherence",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/nutrition-adherence?from=2026-01-01&to=2026-12-31&limit=10",
+              "protocol": "http",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "nutrition-adherence"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

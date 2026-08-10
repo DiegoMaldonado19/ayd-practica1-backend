@@ -140,6 +140,8 @@ public class SecurityConfig
                     // notification. The inbox is the caller's own, so the rule is the
                     // token and nothing else: the scope lives in NotificationService.
                     .requestMatchers("/api/v1/notifications/**").authenticated()
+                    // report. All endpoints read-only, admin-only (role A).
+                    .requestMatchers("/api/v1/reports/**").hasRole("ADMIN")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->
