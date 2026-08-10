@@ -6,6 +6,7 @@ import com.fitness.app.access.model.GuestPass;
 import com.fitness.app.access.model.GuestPassType;
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
+import com.fitness.app.config.GymProperties;
 import com.fitness.app.directory.PersonService;
 import com.fitness.app.iam.dto.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class GuestPassService
 {
     private final GuestPassRepository guestPassRepository;
     private final PersonService       personService;
+    private final GymProperties       gymProperties;
 
     public GuestPassResponse create(GuestPassRequest request, AuthenticatedUser principal)
     {
@@ -42,13 +44,14 @@ public class GuestPassService
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "El pase de invitado requiere un anfitrión.");
         }
 
-        // Only FREE_TRIAL is limited: one per person ever
+        // Only FREE_TRIAL is limited: gym.guest-pass.max-free-per-person, the cap
+        // "el equipo debe definir y documentar" (Enunciado), read instead of hardcoded.
         if (request.passType() == GuestPassType.FREE_TRIAL)
         {
             var existingFreePasses = guestPassRepository.countByPersonIdAndPassType(
                     person.getPersonId(), GuestPassType.FREE_TRIAL);
 
-            if (existingFreePasses >= 1)
+            if (existingFreePasses >= gymProperties.guestPass().maxFreePerPerson())
             {
                 throw new BusinessException(ErrorCode.GUEST_PASS_LIMIT_REACHED);
             }

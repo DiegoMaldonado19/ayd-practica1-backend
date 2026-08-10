@@ -4,17 +4,25 @@ import com.fitness.app.directory.dto.TrainerResponse;
 import com.fitness.app.directory.dto.TrainerSpecialtiesRequest;
 import com.fitness.app.directory.dto.UpdateTrainerRequest;
 import com.fitness.app.directory.model.Specialty;
+import com.fitness.app.iam.dto.AuthenticatedUser;
+import com.fitness.app.training.TrainerAssignmentService;
+import com.fitness.app.training.dto.MemberTransferRequest;
+import com.fitness.app.training.dto.TrainerAssignmentResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PagedModel;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * The /trainers routes. Reading is open to every role so a member can choose a
@@ -29,7 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TrainerController
 {
-    private final TrainerService trainerService;
+    private final TrainerService           trainerService;
+    private final TrainerAssignmentService trainerAssignmentService;
 
     @GetMapping
     public PagedModel<TrainerResponse> list(@RequestParam(required = false) Specialty specialty,
@@ -56,5 +65,24 @@ public class TrainerController
                                               @Valid @RequestBody TrainerSpecialtiesRequest request)
     {
         return trainerService.replaceSpecialties(trainerId, request);
+    }
+
+    /**
+     * "La baja de un entrenador transfiere su cartera" (§3.2). The destination profile
+     * is validated by directory and its cap and name are handed to training, which owns
+     * the assignment rows but never reads this module.
+     */
+    @PostMapping("/{trainerId}/member-transfers")
+    public List<TrainerAssignmentResponse> transferCaseload(@PathVariable Long trainerId,
+                                                            @Valid @RequestBody MemberTransferRequest request,
+                                                            @AuthenticationPrincipal AuthenticatedUser principal)
+    {
+        var target = trainerService.findTransferTarget(trainerId, request.toTrainerId());
+
+        return trainerAssignmentService.transferCaseload(trainerId,
+                                                         target.trainerId(),
+                                                         target.maxMemberLoad(),
+                                                         target.person().fullName(),
+                                                         principal.appUserId());
     }
 }

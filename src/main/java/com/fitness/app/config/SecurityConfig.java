@@ -129,6 +129,17 @@ public class SecurityConfig
                     .requestMatchers(HttpMethod.POST,  "/api/v1/waitlist-entries/*/confirmations").hasRole("MEMBER")
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/enrollments")
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    // training. Only the trainer-member relationship so far; the rest
+                    // of §3.7 arrives with its own module. Everyone reads it -the
+                    // member checks who their trainer is- but the administrator "es el
+                    // único usuario autorizado para asignar formalmente un entrenador
+                    // personal a un socio" (Enunciado), so the receptionist is out.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/trainer")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members/*/trainer").hasRole("ADMIN")
+                    // notification. The inbox is the caller's own, so the rule is the
+                    // token and nothing else: the scope lives in NotificationService.
+                    .requestMatchers("/api/v1/notifications/**").authenticated()
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->

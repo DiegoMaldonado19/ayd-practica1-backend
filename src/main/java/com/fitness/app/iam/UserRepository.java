@@ -19,6 +19,13 @@ public interface UserRepository extends JpaRepository<AppUser, Long>
     boolean existsByPersonId(Long personId);
 
     /**
+     * The account behind a file, for the notice addressed to its holder. Empty when
+     * the person has no credentials: uq_app_user_person allows at most one account,
+     * never demands it.
+     */
+    Optional<AppUser> findByPersonId(Long personId);
+
+    /**
      * One query with nullable filters instead of a Specification and its helper
      * classes. search matches the username only: matching the person's name
      * would mean joining directory's table from iam, which is exactly what the

@@ -4,6 +4,7 @@ import com.fitness.app.classes.dto.ClassSessionResponse;
 import com.fitness.app.classes.dto.SessionCancellationRequest;
 import com.fitness.app.classes.dto.SessionRescheduleRequest;
 import com.fitness.app.classes.dto.SessionStatusRequest;
+import com.fitness.app.classes.model.ClassEnrollment;
 import com.fitness.app.classes.model.ClassSession;
 import com.fitness.app.classes.model.Discipline;
 import com.fitness.app.classes.model.EnrollmentStatus;
@@ -14,6 +15,7 @@ import com.fitness.app.common.exception.ErrorCode;
 import com.fitness.app.directory.TrainerService;
 import com.fitness.app.iam.dto.AuthenticatedUser;
 import com.fitness.app.iam.model.UserRole;
+import com.fitness.app.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +45,7 @@ public class ClassSessionService
     private final WaitlistEntryRepository   waitlistEntryRepository;
     private final GroupClassService         groupClassService;
     private final TrainerService            trainerService;
+    private final NotificationService       notificationService;
 
     @Transactional(readOnly = true)
     public Page<ClassSessionResponse> search(LocalDate from, LocalDate to, Discipline discipline, Long trainerId,
@@ -113,8 +116,8 @@ public class ClassSessionService
         session.setMaxCapacity(request.maxCapacity());
         session.setTrainerId(request.trainerId());
 
-        // ponytail: SESSION_RESCHEDULED debiera notificar a los inscritos; el módulo
-        // notification no existe todavía (02-Modulos §2.9).
+        notificationService.sessionRescheduled(enrolledMemberIds(sessionId), session.getGroupClass().getName(),
+                                               session.getSessionDate(), session.getStartTime());
 
         return ClassSessionResponse.from(session, seatsTaken(sessionId));
     }
@@ -167,17 +170,18 @@ public class ClassSessionService
         session.setStatus(SessionStatus.CANCELLED);
         session.setCancellationReason(request.cancellationReason());
 
-        var now = Instant.now();
+        var now       = Instant.now();
+        var cancelled = classEnrollmentRepository.findByClassSessionIdAndStatus(sessionId, EnrollmentStatus.ENROLLED);
 
-        classEnrollmentRepository.findByClassSessionIdAndStatus(sessionId, EnrollmentStatus.ENROLLED)
-                .forEach(enrollment ->
-                {
-                    enrollment.setStatus(EnrollmentStatus.CANCELLED);
-                    enrollment.setCancelledAt(now);
-                });
+        cancelled.forEach(enrollment ->
+        {
+            enrollment.setStatus(EnrollmentStatus.CANCELLED);
+            enrollment.setCancelledAt(now);
+        });
 
-        // ponytail: SESSION_CANCELLED debiera notificar a los inscritos; el módulo
-        // notification no existe todavía (02-Modulos §2.9).
+        notificationService.sessionCancelled(cancelled.stream().map(ClassEnrollment::getMemberId).toList(),
+                                             session.getGroupClass().getName(), session.getSessionDate(),
+                                             request.cancellationReason());
 
         return ClassSessionResponse.from(session, seatsTaken(sessionId));
     }
@@ -198,6 +202,14 @@ public class ClassSessionService
         {
             throw new BusinessException(ErrorCode.TRAINER_SCOPE_VIOLATION);
         }
+    }
+
+    /** Who is still holding a seat, which is who a reschedule or a cancellation has to reach. */
+    private List<Long> enrolledMemberIds(Long sessionId)
+    {
+        return classEnrollmentRepository.findByClassSessionIdAndStatus(sessionId, EnrollmentStatus.ENROLLED).stream()
+                .map(ClassEnrollment::getMemberId)
+                .toList();
     }
 
     /** Seats taken on one session: active enrolments + reserved-but-unexpired waitlist notifications. */

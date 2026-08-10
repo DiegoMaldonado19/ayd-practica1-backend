@@ -17,6 +17,7 @@ import com.fitness.app.iam.dto.AuthenticatedUser;
 import com.fitness.app.membership.MembershipService;
 import com.fitness.app.membership.model.MembershipPlan;
 import com.fitness.app.membership.model.PlanBenefit;
+import com.fitness.app.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +47,7 @@ public class EnrollmentService
     private final ClassSessionService       classSessionService;
     private final MemberService             memberService;
     private final MembershipService         membershipService;
+    private final NotificationService       notificationService;
     private final GymProperties             gymProperties;
 
     /** The seven-step order of 02-Modulos §2.6, fixed. */
@@ -315,15 +317,17 @@ public class EnrollmentService
         var tiers = membershipService.findActiveTiers(waiting.stream().map(WaitlistEntry::getMemberId).toList());
         var next  = waiting.stream().min(WaitlistEntry.byPlanPriority(tiers)).orElseThrow();
 
-        var now = Instant.now();
+        var now      = Instant.now();
+        var deadline = now.plus(gymProperties.classes().waitlistConfirmationMinutes(), ChronoUnit.MINUTES);
 
         next.setStatus(WaitlistStatus.NOTIFIED);
         next.setNotifiedAt(now);
-        next.setConfirmationDeadline(now.plus(gymProperties.classes().waitlistConfirmationMinutes(), ChronoUnit.MINUTES));
+        next.setConfirmationDeadline(deadline);
 
-        // ponytail: WAITLIST_SEAT_AVAILABLE debiera enviarse por correo; el módulo
-        // notification no existe todavía (02-Modulos §2.9). El estado NOTIFIED con su
-        // notified_at es lo que queda materializado mientras tanto.
+        var session = classSessionService.findOrFail(sessionId);
+
+        notificationService.waitlistSeatAvailable(next.getMemberId(), session.getGroupClass().getName(),
+                                                  session.getSessionDate(), deadline);
     }
 
     ClassEnrollment findOrFail(Long enrollmentId)

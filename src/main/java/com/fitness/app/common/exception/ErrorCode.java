@@ -86,6 +86,8 @@ public enum ErrorCode
     CLASS_SESSION_NOT_FOUND       (HttpStatus.NOT_FOUND,           null,                      "La sesión de clase no existe."),
     ENROLLMENT_NOT_FOUND          (HttpStatus.NOT_FOUND,           null,                      "La inscripción no existe."),
     WAITLIST_ENTRY_NOT_FOUND      (HttpStatus.NOT_FOUND,           null,                      "La entrada en la lista de espera no existe."),
+    NOTIFICATION_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "El aviso no existe."),
+    TRAINER_ASSIGNMENT_NOT_FOUND  (HttpStatus.NOT_FOUND,           null,                      "El socio no tiene un entrenador asignado."),
 
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),

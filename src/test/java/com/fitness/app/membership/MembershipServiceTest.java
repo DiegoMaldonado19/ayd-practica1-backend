@@ -17,6 +17,7 @@ import com.fitness.app.membership.model.MembershipFreeze;
 import com.fitness.app.membership.model.MembershipPlan;
 import com.fitness.app.membership.model.MembershipStatus;
 import com.fitness.app.membership.model.FreezeReason;
+import com.fitness.app.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -58,6 +60,9 @@ class MembershipServiceTest
     @Mock private MembershipPlanService      membershipPlanService;
     @Mock private MemberService              memberService;
 
+    /** Every scheduled sweep and every freeze notifies; the assertions live in NotificationServiceTest. */
+    @Mock private NotificationService         notificationService;
+
     /** Freezing calls classes to cancel the member's future enrolments; nothing here asserts on it. */
     @Mock private ObjectProvider<EnrollmentService> enrollmentServiceProvider;
 
@@ -65,7 +70,8 @@ class MembershipServiceTest
     @Spy private GymProperties gymProperties = new GymProperties(
             new GymProperties.Freeze(15, 2, 90),
             new GymProperties.GuestPass(1),
-            new GymProperties.Classes(2, 60));
+            new GymProperties.Classes(2, 60),
+            new GymProperties.Membership(5));
 
     @InjectMocks private MembershipService membershipService;
 
@@ -241,6 +247,24 @@ class MembershipServiceTest
                                                                  new CancellationRequest(null, null),
                                                                  principal()))
                              .getErrorCode());
+    }
+
+    @Test
+    void warnsOnlyTheContractsThatExpireExactlyOnTheNoticeDate()
+    {
+        // "Notificar al socio 5 días antes del vencimiento" (Enunciado) is one notice.
+        // The sweep runs daily, so a window would mail the same member every day of
+        // the margin instead.
+        var noticeDate = LocalDate.now().plusDays(5);
+        var expiring   = membership(MembershipStatus.ACTIVE);
+
+        expiring.setEndDate(noticeDate);
+
+        when(membershipRepository.findExpiringOn(noticeDate, MembershipStatus.ACTIVE)).thenReturn(List.of(expiring));
+
+        membershipService.notifyExpiringMemberships();
+
+        verify(notificationService).membershipExpiring(MEMBER_ID, noticeDate, 5);
     }
 
     private static MembershipRequest contractRequest()
