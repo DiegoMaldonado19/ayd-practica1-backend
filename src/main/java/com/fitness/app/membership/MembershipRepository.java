@@ -89,4 +89,27 @@ public interface MembershipRepository extends JpaRepository<Membership, Long>
               AND m.endDate < :today
            """)
     int expireDueContracts(LocalDate today, MembershipStatus active, MembershipStatus expired);
+
+    /** The members about to expire, read before expireDueContracts so classes can cancel their future enrollments. */
+    @Query("""
+           SELECT m.memberId
+             FROM Membership m
+            WHERE m.status = :active
+              AND m.endDate < :today
+           """)
+    List<Long> findMemberIdsDueToExpire(LocalDate today, MembershipStatus active);
+
+    /**
+     * The contract in force of each member, plan tier included, in one query. Used to
+     * order a class waitlist by plan priority (Elite before Premium) without classes
+     * mapping membership's entities.
+     */
+    @Query("""
+           SELECT m
+             FROM Membership m
+             JOIN FETCH m.plan p
+            WHERE m.memberId IN :memberIds
+              AND m.status IN :inForceStatuses
+           """)
+    List<Membership> findInForceByMemberIdIn(Collection<Long> memberIds, Collection<MembershipStatus> inForceStatuses);
 }

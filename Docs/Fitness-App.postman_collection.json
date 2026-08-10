@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nCuatro endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/enrollments` | `classes` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
+    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n| **Classes** | `classes` | 23 | `03-API-REST §3.6` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nTres endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -236,6 +236,222 @@
       "value": "",
       "type": "string",
       "description": "Correo del invitado, generado por corrida."
+    },
+    {
+      "key": "basic_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan Basico, el que no incluye clases grupales."
+    },
+    {
+      "key": "premium_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan Premium, tres clases por semana."
+    },
+    {
+      "key": "elite_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan Elite, clases ilimitadas y prioridad en la cola."
+    },
+    {
+      "key": "classes_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio Premium que se inscribe y luego cancela."
+    },
+    {
+      "key": "classes_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del socio de clases."
+    },
+    {
+      "key": "classes_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del socio de clases, generado por corrida."
+    },
+    {
+      "key": "classes_document_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del socio de clases, generado por corrida."
+    },
+    {
+      "key": "classes_membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Contrato Premium del socio de clases."
+    },
+    {
+      "key": "second_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Segundo socio Premium; es quien asiste y califica."
+    },
+    {
+      "key": "second_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del segundo socio."
+    },
+    {
+      "key": "second_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del segundo socio, generado por corrida."
+    },
+    {
+      "key": "second_document_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del segundo socio, generado por corrida."
+    },
+    {
+      "key": "second_enrollment_id",
+      "value": "",
+      "type": "string",
+      "description": "Inscripcion del segundo socio, la que se marca ATTENDED."
+    },
+    {
+      "key": "waitlist_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio Elite que entra a la lista de espera."
+    },
+    {
+      "key": "waitlist_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del socio Elite."
+    },
+    {
+      "key": "waitlist_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del socio Elite, generado por corrida."
+    },
+    {
+      "key": "waitlist_document_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del socio Elite, generado por corrida."
+    },
+    {
+      "key": "basic_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio del plan Basico, para PLAN_BENEFIT_NOT_INCLUDED."
+    },
+    {
+      "key": "basic_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del socio Basico."
+    },
+    {
+      "key": "basic_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del socio Basico, generado por corrida."
+    },
+    {
+      "key": "basic_document_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del socio Basico, generado por corrida."
+    },
+    {
+      "key": "classes_username",
+      "value": "",
+      "type": "string",
+      "description": "Usuario del segundo socio, generado por corrida."
+    },
+    {
+      "key": "classes_password",
+      "value": "Socio123*",
+      "type": "string",
+      "description": "Contrasena del segundo socio."
+    },
+    {
+      "key": "classes_challenge_id",
+      "value": "",
+      "type": "string",
+      "description": "Reto de doble factor del segundo socio."
+    },
+    {
+      "key": "classes_verification_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo de seis digitos del log; pegalo a mano."
+    },
+    {
+      "key": "classes_member_token",
+      "value": "",
+      "type": "string",
+      "description": "Token del segundo socio, para las dos rutas de rol S."
+    },
+    {
+      "key": "group_class_id",
+      "value": "",
+      "type": "string",
+      "description": "Clase grupal recurrente creada por esta carpeta."
+    },
+    {
+      "key": "group_class_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo de la clase, generado por corrida."
+    },
+    {
+      "key": "group_class_start",
+      "value": "",
+      "type": "string",
+      "description": "Hora de la clase, sorteada para no chocar con uq_group_class_slot."
+    },
+    {
+      "key": "session_from",
+      "value": "",
+      "type": "string",
+      "description": "Proximo lunes: inicio del rango de generacion."
+    },
+    {
+      "key": "session_to",
+      "value": "",
+      "type": "string",
+      "description": "El lunes siguiente: fin del rango de generacion."
+    },
+    {
+      "key": "class_session_id",
+      "value": "",
+      "type": "string",
+      "description": "Primera sesion generada; sobre ella corre todo el recorrido."
+    },
+    {
+      "key": "alt_class_session_id",
+      "value": "",
+      "type": "string",
+      "description": "Segunda sesion; reprogramacion, reactivacion y cancelacion."
+    },
+    {
+      "key": "enrollment_id",
+      "value": "",
+      "type": "string",
+      "description": "Inscripcion del socio de clases en la primera sesion."
+    },
+    {
+      "key": "alt_enrollment_id",
+      "value": "",
+      "type": "string",
+      "description": "Inscripcion en la segunda sesion, la que se reactiva."
+    },
+    {
+      "key": "waitlist_entry_id",
+      "value": "",
+      "type": "string",
+      "description": "Entrada del socio Elite en la lista de espera."
     }
   ],
   "item": [
@@ -3386,7 +3602,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"member_id\": {{member_id}}, \"plan_id\": 1}"
+              "raw": "{\"member_id\": {{member_id}}, \"membership_plan_id\": 1}"
             },
             "url": {
               "raw": "{{base_url}}/memberships",
@@ -4062,6 +4278,2692 @@
                   "pm.test(\"Responde 401 UNAUTHENTICATED\", function () {",
                   "    pm.response.to.have.status(401);",
                   "    pm.expect(pm.response.json().error_code).to.equal(\"UNAUTHENTICATED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Classes",
+      "description": "Clases grupales (`03-API-REST §3.6`): catálogo recurrente, generación de sesiones fechadas, inscripción con doble validación, límite semanal, lista de espera con prioridad por plan, asistencia y calificación. Es el módulo con más reglas de negocio del sistema.\n\n**El orden de las siete validaciones de una inscripción es fijo** (`02-Modulos §2.6`), y la carpeta las recorre una por una:\n\n| # | Se comprueba | Error |\n|:--:|---|---|\n| 1 | La sesión existe y admite inscripciones | `SESSION_CANCELLED` |\n| 2 | El socio existe y el llamador puede verlo | `MEMBER_NOT_FOUND` · `FORBIDDEN_RESOURCE` |\n| 3 | Su membresía está vigente | `MEMBERSHIP_NOT_ACTIVE` · `MEMBERSHIP_FROZEN` |\n| 4 | Su plan incluye clases grupales | `PLAN_BENEFIT_NOT_INCLUDED` |\n| 5 | No está ya inscrito | `ALREADY_ENROLLED` |\n| 6 | No agotó el límite semanal de su plan | `WEEKLY_LIMIT_REACHED` |\n| 7 | Queda cupo | `SEAT_UNAVAILABLE` |\n\n**El cupo ocupado no se almacena nunca** (`04-Base-de-Datos §6`). Se calcula como las inscripciones no canceladas **más** las reservas de lista de espera todavía dentro de su plazo: cuando alguien cancela, el lugar liberado queda apartado para el primero de la cola durante `gym.classes.waitlist-confirmation-minutes` y sigue contando como ocupado.\n\n**El límite semanal se cuenta sobre la semana de la sesión pedida**, de lunes a domingo, no sobre la de hoy: inscribirse el domingo a la clase del martes consume la semana siguiente.\n\n**Fixtures propias, como en Access.** La carpeta da de alta sus cuatro socios y contrata sus planes, así que no depende del estado en que las carpetas anteriores dejaron al suyo. Lo único que reutiliza es `{{trainer_id}}`, que deja **Employees**.\n\n**Dos peticiones se omiten solas.** `POST /class-sessions/{id}/ratings` y `POST /waitlist-entries/{id}/confirmations` son exclusivas del rol socio, y toda cuenta creada con `POST /users` nace con doble factor. Para ejecutarlas hay que leer el código del log y ponerlo en `classes_verification_code`, igual que en **Auth › Verificar reto (2FA)**.",
+      "item": [
+        {
+          "name": "Planes para las clases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/membership-plans?page=0&size=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** Resuelve los tres planes sembrados por `data.sql` por su código, porque las reglas de esta carpeta dependen del beneficio y del límite de cada uno: `BASIC` no incluye clases, `PREMIUM` permite 3 por semana y `ELITE` es ilimitado y encabeza la lista de espera."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const planes = pm.response.json().content;",
+                  "const porCodigo = (codigo) => planes.find((p) => p.code === codigo);",
+                  "",
+                  "pm.collectionVariables.set(\"basic_plan_id\", porCodigo(\"BASIC\").membership_plan_id);",
+                  "pm.collectionVariables.set(\"premium_plan_id\", porCodigo(\"PREMIUM\").membership_plan_id);",
+                  "pm.collectionVariables.set(\"elite_plan_id\", porCodigo(\"ELITE\").membership_plan_id);",
+                  "",
+                  "pm.test(\"Los tres planes del enunciado estan sembrados\", function () {",
+                  "    pm.expect(porCodigo(\"BASIC\").includes_group_classes).to.eql(false);",
+                  "    pm.expect(porCodigo(\"PREMIUM\").weekly_class_limit).to.eql(3);",
+                  "    pm.expect(porCodigo(\"ELITE\").weekly_class_limit).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio de clases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{classes_document}}\",\n    \"first_name\": \"Clases\",\n    \"last_name\": \"Ramirez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{classes_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_person_document y uq_person_email: la coleccion se corre varias veces sobre la misma base.",
+                  "const sufijo = String(Date.now()).slice(-9) + Math.floor(Math.random() * 90 + 10);",
+                  "",
+                  "pm.collectionVariables.set(\"classes_document\", \"2\" + sufijo);",
+                  "pm.collectionVariables.set(\"classes_document_email\", \"classes_document\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"classes_member_id\", body.member_id);",
+                  "pm.collectionVariables.set(\"classes_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{second_document}}\",\n    \"first_name\": \"Socio\",\n    \"last_name\": \"Morales\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{second_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_person_document y uq_person_email: la coleccion se corre varias veces sobre la misma base.",
+                  "const sufijo = String(Date.now()).slice(-9) + Math.floor(Math.random() * 90 + 10);",
+                  "",
+                  "pm.collectionVariables.set(\"second_document\", \"2\" + sufijo);",
+                  "pm.collectionVariables.set(\"second_document_email\", \"second_document\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"second_member_id\", body.member_id);",
+                  "pm.collectionVariables.set(\"second_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio Elite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{waitlist_document}}\",\n    \"first_name\": \"Elite\",\n    \"last_name\": \"Castillo\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{waitlist_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_person_document y uq_person_email: la coleccion se corre varias veces sobre la misma base.",
+                  "const sufijo = String(Date.now()).slice(-9) + Math.floor(Math.random() * 90 + 10);",
+                  "",
+                  "pm.collectionVariables.set(\"waitlist_document\", \"2\" + sufijo);",
+                  "pm.collectionVariables.set(\"waitlist_document_email\", \"waitlist_document\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"waitlist_member_id\", body.member_id);",
+                  "pm.collectionVariables.set(\"waitlist_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio Basico",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace **Access**: así el recorrido de clases no depende del estado en que las carpetas anteriores dejaron a su socio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{basic_document}}\",\n    \"first_name\": \"Basico\",\n    \"last_name\": \"Herrera\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"{{basic_document_email}}\",\n    \"phone\": \"55550001\",\n    \"address\": \"3a calle 4-56, zona 1\"\n  },\n  \"emergency_contact_name\": \"Contacto de emergencia\",\n  \"emergency_contact_phone\": \"55550002\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_person_document y uq_person_email: la coleccion se corre varias veces sobre la misma base.",
+                  "const sufijo = String(Date.now()).slice(-9) + Math.floor(Math.random() * 90 + 10);",
+                  "",
+                  "pm.collectionVariables.set(\"basic_document\", \"2\" + sufijo);",
+                  "pm.collectionVariables.set(\"basic_document_email\", \"basic_document\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"basic_member_id\", body.member_id);",
+                  "pm.collectionVariables.set(\"basic_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cuenta del segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "**Administrador.** Credenciales para el segundo socio. Son las que firman las dos rutas que solo el socio (`S`) puede llamar: **Confirmar el cupo liberado** y **Calificar la clase**.\n\nToda cuenta creada aquí nace con doble factor encendido, así que el token se obtiene en dos pasos y el código hay que leerlo del log. Las peticiones que lo necesitan se omiten solas si no está.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_id\": \"{{second_person_id}}\",\n  \"username\": \"{{classes_username}}\",\n  \"password\": \"{{classes_password}}\",\n  \"role\": \"MEMBER\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_app_user_username: un nombre fijo chocaria en la segunda corrida.",
+                  "pm.collectionVariables.set(\"classes_username\", \"socioclases\" + String(Date.now()).slice(-8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"classes_member_token\", \"\");"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Premium al socio de clases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}},\n  \"membership_plan_id\": {{premium_plan_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"classes_membership_id\", body.membership_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Premium al segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{second_member_id}},\n  \"membership_plan_id\": {{premium_plan_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Elite al tercero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{waitlist_member_id}},\n  \"membership_plan_id\": {{elite_plan_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Basico al cuarto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Sin contrato vigente la inscripción responde `MEMBERSHIP_NOT_ACTIVE` antes de mirar el cupo: el orden de validación de `02-Modulos §2.6` pone la membresía por delante de la clase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{basic_member_id}},\n  \"membership_plan_id\": {{basic_plan_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear clase grupal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ]
+            },
+            "description": "**Administrador.** «El administrador crea las clases grupales definiendo: nombre de la clase, entrenador a cargo, horario, duración y cupo máximo» (enunciado).\n\nLa clase es la **definición recurrente**, no una fecha: `weekday` y `start_time` describen el hueco semanal y las ocurrencias fechadas las crea **Generar sesiones del rango**. El cupo es de 2 a propósito, para poder llenarlo y provocar `SEAT_UNAVAILABLE` en tres peticiones.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_NOT_FOUND` | 404 | El entrenador no existe. |\n| `VALIDATION_ERROR` | 400 | El código ya está en uso. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga matutino\",\n  \"discipline\": \"YOGA\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"MONDAY\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 2\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_group_class_code y uq_group_class_slot (entrenador, dia, hora): la hora se sortea",
+                  "// para que la coleccion se pueda correr varias veces sobre el mismo entrenador.",
+                  "const hora = String(Math.floor(Math.random() * 14) + 6).padStart(2, \"0\");",
+                  "",
+                  "pm.collectionVariables.set(\"group_class_code\", \"YG\" + String(Date.now()).slice(-8));",
+                  "pm.collectionVariables.set(\"group_class_start\", hora + \":00\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"group_class_id\", body.group_class_id);",
+                  "",
+                  "pm.test(\"Nace activa y con el nivel por defecto\", function () {",
+                  "    pm.expect(body.active).to.eql(true);",
+                  "    pm.expect(body.difficulty_level).to.eql(\"BEGINNER\");",
+                  "    pm.expect(body.max_capacity).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear clase con codigo repetido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ]
+            },
+            "description": "**Administrador.** `uq_group_class_code` dice lo mismo en la base, pero el servicio responde un código de negocio en lugar de una violación de restricción.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Ya existe una clase con ese código. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga repetido\",\n  \"discipline\": \"YOGA\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"FRIDAY\",\n  \"start_time\": \"20:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 10\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code VALIDATION_ERROR\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Catalogo de clases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/group-classes?discipline=YOGA&active=true&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ],
+              "query": [
+                {
+                  "key": "discipline",
+                  "value": "YOGA"
+                },
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** Catálogo y clases a cargo de un entrenador. Filtros: `discipline`, `trainer_id`, `difficulty_level` y `active`, todos opcionales y combinables en una sola consulta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Trae la clase recien creada\", function () {",
+                  "    const ids = pm.response.json().content.map((c) => c.group_class_id);",
+                  "    pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"group_class_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle de la clase",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}"
+              ]
+            },
+            "description": "**Todos los roles.** La definición recurrente completa.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Es la clase pedida\", function () {",
+                  "    pm.expect(pm.response.json().group_class_id).to.eql(Number(pm.collectionVariables.get(\"group_class_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Actualizar la clase",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}"
+              ]
+            },
+            "description": "**Administrador.** Modifica la definición. El cambio afecta a las sesiones que se generen **después**: las ya generadas llevan su propia copia de entrenador, hora y cupo, porque `§3.6` permite reprogramar una fecha suelta sin tocar la clase.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{group_class_code}}\",\n  \"name\": \"Yoga matutino intermedio\",\n  \"discipline\": \"YOGA\",\n  \"difficulty_level\": \"INTERMEDIATE\",\n  \"trainer_id\": \"{{trainer_id}}\",\n  \"weekday\": \"MONDAY\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 2\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Aplica el nivel y la descripcion nuevos\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.difficulty_level).to.eql(\"INTERMEDIATE\");",
+                  "    pm.expect(body.name).to.eql(\"Yoga matutino intermedio\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Generar sesiones del rango",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}",
+                "sessions"
+              ]
+            },
+            "description": "**Administrador.** Crea una `class_session` por cada fecha del rango cuyo día de la semana sea el de la clase, copiando entrenador, hora y cupo. El rango va del próximo lunes al siguiente, así que salen **dos** sesiones, ambas en el futuro: sin eso el margen de cancelación de dos horas ya estaría vencido.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{session_from}}\",\n  \"to\": \"{{session_to}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Los dos lunes siguientes: las sesiones deben quedar en el futuro para que la",
+                  "// cancelacion caiga dentro del margen de dos horas.",
+                  "const pad = (n) => String(n).padStart(2, \"0\");",
+                  "const iso = (d) => d.getFullYear() + \"-\" + pad(d.getMonth() + 1) + \"-\" + pad(d.getDate());",
+                  "",
+                  "const lunes = new Date();",
+                  "lunes.setDate(lunes.getDate() + ((8 - lunes.getDay()) % 7 || 7));",
+                  "",
+                  "const siguiente = new Date(lunes);",
+                  "siguiente.setDate(siguiente.getDate() + 7);",
+                  "",
+                  "pm.collectionVariables.set(\"session_from\", iso(lunes));",
+                  "pm.collectionVariables.set(\"session_to\", iso(siguiente));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const sesiones = pm.response.json();",
+                  "",
+                  "pm.test(\"Genera una sesion por lunes del rango\", function () {",
+                  "    pm.expect(sesiones.length).to.eql(2);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"class_session_id\", sesiones[0].class_session_id);",
+                  "pm.collectionVariables.set(\"alt_class_session_id\", sesiones[1].class_session_id);",
+                  "",
+                  "pm.test(\"Nacen SCHEDULED, vacias y con el cupo de la clase\", function () {",
+                  "    pm.expect(sesiones[0].status).to.eql(\"SCHEDULED\");",
+                  "    pm.expect(sesiones[0].seats_taken).to.eql(0);",
+                  "    pm.expect(sesiones[0].seats_available).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Generar el mismo rango otra vez",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}",
+                "sessions"
+              ]
+            },
+            "description": "**Administrador.** `uq_session_date` impide dos sesiones de la misma clase el mismo día. Las fechas que ya tienen sesión se omiten en lugar de reventar el lote entero, así que repetir la generación es inofensivo y la respuesta viene vacía.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{session_from}}\",\n  \"to\": \"{{session_to}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"No duplica ninguna fecha\", function () {",
+                  "    pm.expect(pm.response.json().length).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sesiones de la clase",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}/sessions?from={{session_from}}&to={{session_to}}&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}",
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{session_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{session_to}}"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** Las ocurrencias fechadas de una clase. Filtros: `from` y `to`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Trae las dos sesiones generadas\", function () {",
+                  "    pm.expect(pm.response.json().page.total_elements).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cartelera",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions?from={{session_from}}&to={{session_to}}&discipline=YOGA&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{session_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{session_to}}"
+                },
+                {
+                  "key": "discipline",
+                  "value": "YOGA"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** La cartelera y, con `trainer_id`, la agenda del entrenador. Filtros: `from`, `to`, `discipline`, `trainer_id`, `group_class_id` y `has_seats`.\n\n`seats_taken` y `seats_available` van **calculados**, nunca almacenados (`04-Base-de-Datos §6`): son las inscripciones no canceladas más las reservas de lista de espera todavía vigentes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Cada fila trae los cupos calculados\", function () {",
+                  "    pm.response.json().content.forEach((s) => {",
+                  "        pm.expect(s.seats_taken + s.seats_available).to.eql(s.max_capacity);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle de la sesion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}"
+              ]
+            },
+            "description": "**Todos los roles.** Detalle de una ocurrencia con sus cupos.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `CLASS_SESSION_NOT_FOUND` | 404 | La sesión no existe. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Empieza vacia\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.seats_taken).to.eql(0);",
+                  "    pm.expect(body.seats_available).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir al socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Las cinco validaciones de `02-Modulos §2.6` corren en orden fijo: sesión disponible → socio → membresía vigente → beneficio del plan → inscripción previa → límite semanal → cupo. El orden importa: un socio del plan Básico recibe `PLAN_BENEFIT_NOT_INCLUDED` aunque la clase esté llena, porque el beneficio se mira antes que el cupo.\n\n`channel` es opcional y vale `SELF_SERVICE`; el recepcionista manda `FRONT_DESK` cuando inscribe en mostrador.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `MEMBERSHIP_NOT_ACTIVE` · `MEMBERSHIP_FROZEN` | 409 | El contrato no está vigente. |\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en esta sesión. |\n| `WEEKLY_LIMIT_REACHED` | 409 | Ya consumió las clases de la semana. |\n| `SEAT_UNAVAILABLE` | 409 | No queda cupo; puede unirse a la lista de espera. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}},\n  \"channel\": \"FRONT_DESK\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"enrollment_id\", body.class_enrollment_id);",
+                  "",
+                  "pm.test(\"Nace ENROLLED y por mostrador\", function () {",
+                  "    pm.expect(body.status).to.eql(\"ENROLLED\");",
+                  "    pm.expect(body.channel).to.eql(\"FRONT_DESK\");",
+                  "    pm.expect(body.cancelled_at).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial, así que la segunda inscripción se responde con un código de negocio antes de llegar a la base.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en esta sesión. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code ALREADY_ENROLLED\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"ALREADY_ENROLLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir al socio Basico",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** «Solo los socios con plan Premium o Élite pueden inscribirse» (enunciado). El plan Básico no trae el beneficio, y la respuesta sugiere `UPGRADE_PLAN` para que la interfaz ofrezca el botón correcto.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PLAN_BENEFIT_NOT_INCLUDED` | 403 | El plan no incluye clases grupales. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{basic_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code PLAN_BENEFIT_NOT_INCLUDED y sugiere mejorar el plan\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"PLAN_BENEFIT_NOT_INCLUDED\");",
+                  "    pm.expect(body.suggested_action).to.eql(\"UPGRADE_PLAN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir al segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Con esta inscripción la sesión llega a su cupo de 2 y las siguientes tienen que ir a la lista de espera.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{second_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"second_enrollment_id\", pm.response.json().class_enrollment_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Lista de inscritos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y entrenador.** El roster de la sesión, que es también la lista sobre la que el entrenador marca asistencia."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Los dos socios estan inscritos\", function () {",
+                  "    pm.expect(pm.response.json().page.total_elements).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cartelera con cupo disponible",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions?from={{session_from}}&to={{session_to}}&has_seats=true&group_class_id={{group_class_id}}&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{session_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{session_to}}"
+                },
+                {
+                  "key": "has_seats",
+                  "value": "true"
+                },
+                {
+                  "key": "group_class_id",
+                  "value": "{{group_class_id}}"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** `has_seats=true` deja fuera las sesiones llenas. La sesión de esta carpeta ya agotó sus dos lugares, así que no aparece; la del lunes siguiente sí."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"La sesion llena no aparece\", function () {",
+                  "    const ids = pm.response.json().content.map((s) => s.class_session_id);",
+                  "    pm.expect(ids).to.not.include(Number(pm.collectionVariables.get(\"class_session_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir sin cupo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** «Si no hay cupo, responde `409 SEAT_UNAVAILABLE` indicando que puede unirse a la lista de espera» (`§3.6`): eso es lo que dice `suggested_action`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SEAT_UNAVAILABLE` | 409 | La clase alcanzó su cupo máximo. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"error_code SEAT_UNAVAILABLE y sugiere la lista de espera\", function () {",
+                  "    pm.expect(body.error_code).to.eql(\"SEAT_UNAVAILABLE\");",
+                  "    pm.expect(body.suggested_action).to.eql(\"JOIN_WAITLIST\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unirse a la lista de espera",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/waitlist-entries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "waitlist-entries"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Solo se entra a la cola si la sesión está llena: con cupo libre el socio debe inscribirse. Valida membresía y beneficio igual que la inscripción.\n\nQuien se une aquí es el socio **Élite**, y lo hace **después** del socio Premium de la petición siguiente, para que la promoción tenga que elegir por plan y no por hora.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_ENROLLED` | 409 | Ya está inscrito en la sesión. |\n| `ALREADY_IN_WAITLIST` | 409 | Ya está en la cola. |\n| `VALIDATION_ERROR` | 400 | La sesión todavía tiene cupo. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"waitlist_entry_id\", body.waitlist_entry_id);",
+                  "",
+                  "pm.test(\"Entra en WAITING y sin reserva todavia\", function () {",
+                  "    pm.expect(body.status).to.eql(\"WAITING\");",
+                  "    pm.expect(body.notified_at).to.eql(null);",
+                  "    pm.expect(body.confirmation_deadline).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unirse dos veces a la cola",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/waitlist-entries",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "waitlist-entries"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** `uq_waitlist_member` tampoco lleva predicado parcial.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ALREADY_IN_WAITLIST` | 409 | Ya está en la lista de espera de esta sesión. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{waitlist_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code ALREADY_IN_WAITLIST\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"ALREADY_IN_WAITLIST\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cola de espera",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/waitlist-entries?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "waitlist-entries"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y entrenador.** «Cola de espera, ya ordenada por prioridad de plan y hora de solicitud» (`§3.6`).\n\nNo hay columna de posición: el orden se deriva del `tier` del plan vigente y, a igualdad de plan, de `requested_at`. Así nunca se desordena cuando alguien abandona la cola o cambia de plan."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"El Elite encabeza la cola aunque pidio despues\", function () {",
+                  "    const cola = pm.response.json().content;",
+                  "    pm.expect(cola[0].member_id).to.eql(Number(pm.collectionVariables.get(\"waitlist_member_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancelar la inscripcion",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/enrollments/{{enrollment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "enrollments",
+                "{{enrollment_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** «Cancela la inscripción. Si está dentro del margen de anticipación, libera el cupo y promueve al primero de la lista de espera» (`§3.6`). El margen es `gym.classes.cancellation-window-hours`, dos horas.\n\nEl cupo liberado **queda reservado** para el promovido durante `gym.classes.waitlist-confirmation-minutes`, así que sigue contando como ocupado: sin eso, `WAITLIST_CONFIRMATION_EXPIRED` no querría decir nada.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | La inscripción no existe. |\n| `CANCELLATION_WINDOW_CLOSED` | 409 | Faltan menos de dos horas para la clase. |\n| `INVALID_STATE_TRANSITION` | 409 | La inscripción ya no está `ENROLLED`. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204 sin cuerpo\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "La cola promovio al Elite",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/waitlist-entries?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "waitlist-entries"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador, recepcionista y entrenador.** «Dándole prioridad a los socios con Plan Élite» (enunciado): el socio Élite pidió **después** que el Premium y aun así es el que queda `NOTIFIED`, con su `confirmation_deadline` en marcha."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const notificado = pm.response.json().content.find((e) => e.status === \"NOTIFIED\");",
+                  "",
+                  "pm.test(\"El Elite quedo notificado con plazo para confirmar\", function () {",
+                  "    pm.expect(notificado).to.not.eql(undefined);",
+                  "    pm.expect(notificado.member_id).to.eql(Number(pm.collectionVariables.get(\"waitlist_member_id\")));",
+                  "    pm.expect(notificado.confirmation_deadline).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "El cupo liberado sigue reservado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}"
+              ]
+            },
+            "description": "**Todos los roles.** La reserva viva cuenta como cupo ocupado: la sesión sigue llena aunque una inscripción se haya cancelado. Es lo que impide que otro socio se cuele en el lugar que ya se le prometió al primero de la cola."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Sigue sin cupo disponible\", function () {",
+                  "    pm.expect(pm.response.json().seats_available).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Login del segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "**Público.** Las dos rutas que solo el socio puede llamar necesitan su token. La cuenta nació con doble factor, así que este login responde `202` con un reto y el código de seis dígitos sale por correo o, si `MAIL_USERNAME` está vacío, al log:\n\n```bash\ndocker logs fitness_backend | grep -i verification\n```\n\nCópialo en la variable `classes_verification_code` y ejecuta la petición siguiente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{classes_username}}\",\n  \"password\": \"{{classes_password}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con token o 202 con reto\", function () {",
+                  "    pm.expect([200, 202]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set(\"classes_member_token\", body.access_token);",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"classes_challenge_id\", body.challenge_id);",
+                  "    pm.collectionVariables.set(\"classes_member_token\", \"\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Verificar reto del segundo socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/challenges/{{classes_challenge_id}}/verifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "challenges",
+                "{{classes_challenge_id}}",
+                "verifications"
+              ]
+            },
+            "description": "**Público.** Canjea el código por el token del socio. Se omite sola mientras `classes_verification_code` esté vacía, así que la colección corre completa sin intervención: lo que queda sin ejecutar son las dos peticiones de rol `S`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{classes_verification_code}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const reto   = pm.collectionVariables.get(\"classes_challenge_id\");",
+                  "const codigo = pm.collectionVariables.get(\"classes_verification_code\");",
+                  "",
+                  "if (!reto || !codigo) {",
+                  "    console.log(\"Omitida: no hay classes_challenge_id o classes_verification_code. Lee el codigo del log.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el token\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"classes_member_token\", body.access_token);",
+                  "pm.collectionVariables.set(\"classes_verification_code\", \"\");",
+                  "",
+                  "pm.test(\"El token es de un socio\", function () {",
+                  "    pm.expect(body.user.role).to.eql(\"MEMBER\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Confirmar el cupo liberado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/waitlist-entries/{{waitlist_entry_id}}/confirmations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "waitlist-entries",
+                "{{waitlist_entry_id}}",
+                "confirmations"
+              ]
+            },
+            "description": "**Solo el socio.** «Confirma el cupo liberado dentro de la ventana de confirmación» (`§3.6`). La entrada pasa a `PROMOTED` y nace la inscripción; fuera de la ventana la reserva ya caducó y el cupo se le ofreció al siguiente de la cola.\n\nFirma con `classes_member_token`. Ojo: la reserva es del socio **Élite** y el token es del **segundo socio**, así que aquí se comprueba el otro lado de la regla —un socio no toca la fila de otro— y la respuesta esperada es `403 FORBIDDEN_RESOURCE`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `WAITLIST_CONFIRMATION_EXPIRED` | 409 | La reserva caducó o nunca fue notificada. |\n| `FORBIDDEN_RESOURCE` | 403 | La reserva es de otro socio. |",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. Solo el socio (S) puede llamar esta ruta.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403: la reserva es de otro socio\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code FORBIDDEN_RESOURCE\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Abandonar la lista de espera",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/waitlist-entries/{{waitlist_entry_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "waitlist-entries",
+                "{{waitlist_entry_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** «Abandona la lista de espera» (`§3.6`). Si quien se va tenía el cupo reservado, ese cupo pasa al siguiente de la cola en el mismo movimiento.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `WAITLIST_ENTRY_NOT_FOUND` | 404 | La entrada no existe. |\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya se resolvió. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204 sin cuerpo\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Abandonar la cola dos veces",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/waitlist-entries/{{waitlist_entry_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "waitlist-entries",
+                "{{waitlist_entry_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Una entrada ya resuelta no se puede abandonar otra vez.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La entrada ya no está pendiente. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code INVALID_STATE_TRANSITION\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_STATE_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribir en la segunda sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** La sesión del lunes siguiente, todavía vacía. Sirve para mostrar que cancelar y volver a inscribirse **reactiva la misma fila** en vez de crear una segunda.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"alt_enrollment_id\", pm.response.json().class_enrollment_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancelar en la segunda sesion",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/enrollments/{{alt_enrollment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "enrollments",
+                "{{alt_enrollment_id}}"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Falta más de una semana para esa clase, así que la cancelación cae holgadamente dentro del margen."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204 sin cuerpo\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reinscribirse reactiva la fila",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** `uq_enroll_member` no lleva predicado parcial: una fila `CANCELLED` bloquearía el reingreso si se intentara insertar otra. El servicio reactiva la existente —`CANCELLED → ENROLLED`, `cancelled_at` a nulo— y por eso el identificador es el mismo de antes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Es la misma fila, reactivada\", function () {",
+                  "    pm.expect(body.class_enrollment_id).to.eql(Number(pm.collectionVariables.get(\"alt_enrollment_id\")));",
+                  "    pm.expect(body.status).to.eql(\"ENROLLED\");",
+                  "    pm.expect(body.cancelled_at).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reprogramar sobre un horario ocupado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}"
+              ]
+            },
+            "description": "**Administrador.** «Reprograma: fecha, hora, cupo o entrenador de esa sesión» (`§3.6`).\n\nA nivel de sesión **no hay restricción en la base** —`uq_group_class_slot` solo cuida el hueco semanal de la clase—, así que el choque de agenda del entrenador se comprueba en el servicio, y solo cuando la fecha, la hora o el entrenador cambian de verdad.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_SCHEDULE_CONFLICT` | 409 | El entrenador ya tiene otra clase en ese horario. |\n| `INVALID_STATE_TRANSITION` | 409 | La sesión está cancelada o cerrada. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_date\": \"{{session_from}}\",\n  \"start_time\": \"{{group_class_start}}\",\n  \"max_capacity\": 2,\n  \"trainer_id\": \"{{trainer_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code TRAINER_SCHEDULE_CONFLICT\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCHEDULE_CONFLICT\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reprogramar la segunda sesion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}"
+              ]
+            },
+            "description": "**Administrador.** El mismo día, una hora más tarde y con dos lugares más. Los inscritos conservan su inscripción; notificarles queda pendiente del módulo `notification`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_date\": \"{{session_to}}\",\n  \"start_time\": \"21:00\",\n  \"max_capacity\": 4,\n  \"trainer_id\": \"{{trainer_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Aplica el cupo nuevo\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.max_capacity).to.eql(4);",
+                  "    pm.expect(body.seats_available).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cerrar sin haber abierto",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "status"
+              ]
+            },
+            "description": "**Administrador y entrenador.** Solo hay dos transiciones: `SCHEDULED → IN_PROGRESS` e `IN_PROGRESS → COMPLETED`. `ck_session_closed` dice lo mismo en la base: no puede haber `closed_at` sin `opened_at`.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La transición pedida no existe. |\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no está a cargo de la sesión. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"COMPLETED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code INVALID_STATE_TRANSITION\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_STATE_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Marcar asistencia antes de iniciar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/attendances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "attendances"
+              ]
+            },
+            "description": "**Administrador y entrenador.** La asistencia solo se marca con la clase abierta o ya cerrada.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SESSION_NOT_OPEN` | 409 | La clase todavía no ha iniciado. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendances\": [\n    { \"enrollment_id\": {{second_enrollment_id}}, \"status\": \"ATTENDED\" }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code SESSION_NOT_OPEN\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"SESSION_NOT_OPEN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Iniciar la clase",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "status"
+              ]
+            },
+            "description": "**Administrador y entrenador.** «El entrenador inicia (`IN_PROGRESS`) y cierra (`COMPLETED`) su clase» (`§3.6`). Con un token de entrenador, el servicio compara la sesión con las suyas y responde `TRAINER_SCOPE_VIOLATION` si no le corresponde: «puede ver únicamente las clases que le han sido asignadas» es seguridad, no un filtro de interfaz.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Queda IN_PROGRESS y con la hora de apertura\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(\"IN_PROGRESS\");",
+                  "    pm.expect(body.opened_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Marcar asistencia",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/attendances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "attendances"
+              ]
+            },
+            "description": "**Administrador y entrenador.** «Marca la asistencia de toda la lista en una sola operación» (`§3.6`).\n\nLa asistencia es el **estado de la inscripción** (`ATTENDED` / `ABSENT`), no una tabla aparte (`04-Base-de-Datos §6`). Una inscripción cancelada no se puede marcar: `ck_enroll_cancel` es un si y solo si.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `ENROLLMENT_NOT_FOUND` | 404 | Alguna inscripción de la lista no existe. |\n| `VALIDATION_ERROR` | 400 | La inscripción es de otra sesión o está cancelada. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendances\": [\n    { \"enrollment_id\": {{second_enrollment_id}}, \"status\": \"ATTENDED\" }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Deja ATTENDED con la marca de tiempo\", function () {",
+                  "    const marcada = pm.response.json()[0];",
+                  "    pm.expect(marcada.status).to.eql(\"ATTENDED\");",
+                  "    pm.expect(marcada.attendance_marked_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Calificar la clase",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/ratings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "ratings"
+              ]
+            },
+            "description": "**Solo el socio.** «Califica la clase y al entrenador. Requiere haber asistido» (`§3.6`): se comprueba contra el estado `ATTENDED` de la propia inscripción, nunca contra una bandera aparte.\n\nNo lleva `member_id`: la ruta es exclusiva del socio y quien califica es siempre quien firma el token. Se omite sola si `classes_member_token` está vacía.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `RATING_REQUIRES_ATTENDANCE` | 403 | El socio no asistió a esa sesión. |\n| `INVALID_STATE_TRANSITION` | 409 | Ya calificó esta sesión (`uq_rating_member`). |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"class_score\": 5,\n  \"trainer_score\": 4,\n  \"comment\": \"Muy buena clase, el entrenador explico cada postura.\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. Solo el socio (S) puede llamar esta ruta.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Guarda las dos notas y el comentario\", function () {",
+                  "    pm.expect(body.class_score).to.eql(5);",
+                  "    pm.expect(body.trainer_score).to.eql(4);",
+                  "    pm.expect(body.rated_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cerrar la clase",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "status"
+              ]
+            },
+            "description": "**Administrador y entrenador.** `IN_PROGRESS → COMPLETED` fija `closed_at`, la segunda y última transición de la máquina de estados.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"COMPLETED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Queda COMPLETED y con la hora de cierre\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(\"COMPLETED\");",
+                  "    pm.expect(body.closed_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Calificaciones de la sesion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{class_session_id}}/ratings?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{class_session_id}}",
+                "ratings"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Administrador y entrenador.** «Calificaciones recibidas por la sesión» (`§3.6`). Con un token de entrenador solo llega a las suyas.\n\nViene vacía si **Calificar la clase** se omitió por falta de token del socio.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 | El entrenador no está a cargo de la sesión. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Responde una pagina\", function () {",
+                  "    pm.expect(pm.response.json().page.total_elements).to.be.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Clases del socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members/{{classes_member_id}}/enrollments?status=ENROLLED&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{classes_member_id}}",
+                "enrollments"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ENROLLED"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** «Clases del socio. Filtros: `from`, `to`, `status`» (`§3.2`).\n\nLa ruta cuelga de `/members`, pero las filas son de `class_enrollment`: la sirve el módulo `classes`, igual que `membership` sirve `/members/{id}/memberships`. Al revés cerraría un ciclo entre módulos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Trae el historial del socio\", function () {",
+                  "    pm.expect(pm.response.json().page.total_elements).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancelar la sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}/cancellations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}",
+                "cancellations"
+              ]
+            },
+            "description": "**Administrador.** «Cancela la sesión con motivo y notifica a los inscritos» (`§3.6`). El motivo es obligatorio porque `ck_session_cancel` es un si y solo si: `CANCELLED` y `cancellation_reason` van juntos o no van.\n\nLas inscripciones activas se cancelan en bloque en la misma operación.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La sesión ya está cerrada o cancelada. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"Mantenimiento del salon de yoga.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Queda CANCELLED con su motivo\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(\"CANCELLED\");",
+                  "    pm.expect(body.cancellation_reason).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscribirse en una sesion cancelada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{alt_class_session_id}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{alt_class_session_id}}",
+                "enrollments"
+              ]
+            },
+            "description": "**Administrador, recepcionista y socio.** Primera validación de las siete: una sesión cancelada se responde con su propio código y no con el genérico de transición inválida.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `SESSION_CANCELLED` | 409 | La sesión fue cancelada. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{classes_member_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code SESSION_CANCELLED\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"SESSION_CANCELLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Desactivar la clase",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{group_class_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{group_class_id}}"
+              ]
+            },
+            "description": "**Administrador.** «Desactiva la clase (baja lógica; no borra el historial)» (`§3.6`). Las sesiones ya generadas y sus inscripciones siguen existiendo: lo que se apaga es la definición recurrente, para que no se generen sesiones nuevas.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `GROUP_CLASS_NOT_FOUND` | 404 | La clase no existe. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 204 sin cuerpo\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cartelera sin token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/class-sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions"
+              ]
+            },
+            "description": "**Sin credenciales.** Ninguna ruta de clases es pública: sin token la respuesta es `401` con el cuerpo de error de siempre.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"error_code UNAUTHENTICATED\", function () {",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"UNAUTHENTICATED\");",
                   "});"
                 ]
               }

@@ -67,7 +67,7 @@ gym:
     cycle-days: 90
   guest-pass:
     max-free-per-person: 1
-  class:
+  classes:
     cancellation-window-hours: 2
     waitlist-confirmation-minutes: 60
   membership:
