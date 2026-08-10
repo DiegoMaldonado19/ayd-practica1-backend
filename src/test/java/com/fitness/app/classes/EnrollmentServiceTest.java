@@ -18,6 +18,7 @@ import com.fitness.app.iam.model.UserRole;
 import com.fitness.app.membership.MembershipService;
 import com.fitness.app.membership.model.MembershipPlan;
 import com.fitness.app.membership.model.PlanBenefit;
+import com.fitness.app.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -58,12 +61,14 @@ class EnrollmentServiceTest
     @Mock private ClassSessionService       classSessionService;
     @Mock private MemberService             memberService;
     @Mock private MembershipService         membershipService;
+    @Mock private NotificationService       notificationService;
 
     // The real values of application.yml: 2 hours of margin, 60 minutes to confirm.
     @Spy private GymProperties gymProperties = new GymProperties(
             new GymProperties.Freeze(15, 2, 90),
             new GymProperties.GuestPass(1),
-            new GymProperties.Classes(2, 60));
+            new GymProperties.Classes(2, 60),
+            new GymProperties.Membership(5));
 
     @InjectMocks private EnrollmentService enrollmentService;
 
@@ -191,6 +196,9 @@ class EnrollmentServiceTest
         assertEquals(EnrollmentStatus.CANCELLED, enrollment.getStatus());
         assertEquals(WaitlistStatus.NOTIFIED, elite.getStatus());
         assertEquals(WaitlistStatus.WAITING, premium.getStatus());
+        // "Notificar automáticamente al primer socio en la lista de espera" (Enunciado):
+        // the seat is not just reserved, the member is told about it.
+        verify(notificationService).waitlistSeatAvailable(eq(ELITE_MEMBER), eq("Yoga matutino"), any(), any());
     }
 
     @Test
@@ -208,11 +216,13 @@ class EnrollmentServiceTest
         when(waitlistEntryRepository.findByClassSessionIdAndStatusOrderByRequestedAtAsc(SESSION_ID, WaitlistStatus.WAITING))
                 .thenReturn(List.of(next));
         when(membershipService.findActiveTiers(anyCollection())).thenReturn(Map.of(ELITE_MEMBER, (short) 3));
+        when(classSessionService.findOrFail(SESSION_ID)).thenReturn(session());
 
         enrollmentService.refreshWaitlist(SESSION_ID);
 
         assertEquals(WaitlistStatus.EXPIRED, stale.getStatus());
         assertEquals(WaitlistStatus.NOTIFIED, next.getStatus());
+        verify(notificationService).waitlistSeatAvailable(eq(ELITE_MEMBER), eq("Yoga matutino"), any(), any());
     }
 
     @Test

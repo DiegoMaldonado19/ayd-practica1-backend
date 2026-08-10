@@ -8,8 +8,11 @@ import com.fitness.app.directory.model.Member;
 import com.fitness.app.directory.model.MemberStatus;
 import com.fitness.app.iam.UserService;
 import com.fitness.app.iam.dto.AuthenticatedUser;
+import com.fitness.app.iam.dto.UserResponse;
 import com.fitness.app.iam.model.UserRole;
+import com.fitness.app.training.TrainerAssignmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +40,18 @@ public class MemberService
     private final MemberRepository memberRepository;
     private final PersonService    personService;
     private final UserService      userService;
+    private final TrainerService   trainerService;
+
+    /**
+     * ObjectProvider and not a direct field: notification.NotificationService injects
+     * MemberService to resolve the account behind every notice, and
+     * training.TrainerAssignmentService notifies when it moves a caseload. All three
+     * arrows are the ones 02-Modulos §3 allows, but together they close a bean cycle
+     * Spring refuses to build. The same resolution MembershipService already applies
+     * to classes: the call keeps its documented direction, only the lookup waits until
+     * the bean graph is up.
+     */
+    private final ObjectProvider<TrainerAssignmentService> trainerAssignmentServiceProvider;
 
     /**
      * memberIds null means no membership filter was asked for; an empty list means one
@@ -75,6 +91,23 @@ public class MemberService
         return memberRepository.findByPerson_PersonId(personId)
                 .map(Member::getMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+    }
+
+    /**
+     * The account that receives a notice addressed to a member. notification stores
+     * app_user_id while membership and classes carry member_id, and the dependency
+     * matrix (02-Modulos §3) lets notification reach directory and directory reach
+     * iam - never notification to iam directly. Resolving it here keeps that hop in
+     * one place instead of repeating it in every caller.
+     *
+     * Empty when the member has no credentials: the two-step registration allows a
+     * file without an account, and a notice with no recipient is skipped, not failed.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UserResponse> accountOf(Long memberId)
+    {
+        return memberRepository.findById(memberId)
+                .flatMap(member -> userService.findByPersonId(member.getPerson().getPersonId()));
     }
 
     /** Resolves member names in bulk: one query for a whole page instead of N. */
@@ -139,15 +172,24 @@ public class MemberService
     }
 
     /**
-     * A member only reaches their own file. The trainer scope of §3.2 #3 is not
-     * enforced yet.
-     *
-     * ponytail: knowing which members a trainer has means counting
-     * trainer_assignment, a table of training, so TRAINER_SCOPE_VIOLATION arrives
-     * with that module. Until then a trainer sees every file.
+     * The row-level rules of §3.2 #3: a member only reaches their own file, and a
+     * trainer only the files of the members assigned to them. The administrator and
+     * the receptionist reach every file, which is why neither role is named here.
      */
     private void assertOwnFile(AuthenticatedUser principal, Member member)
     {
+        if (principal.role() == UserRole.TRAINER)
+        {
+            var trainerId = trainerService.findTrainerIdByUser(principal);
+
+            if (!trainerAssignmentServiceProvider.getObject().isAssignedTo(trainerId, member.getMemberId()))
+            {
+                throw new BusinessException(ErrorCode.TRAINER_SCOPE_VIOLATION);
+            }
+
+            return;
+        }
+
         if (principal.role() != UserRole.MEMBER)
         {
             return;

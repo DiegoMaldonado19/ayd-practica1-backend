@@ -81,6 +81,38 @@ public class TrainerService
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
     }
 
+    /**
+     * The trainer that may take members on: a retired one keeps its history but
+     * receives nobody. Resolved here because training does not read directory - it
+     * gets the cap and the name it needs from this profile.
+     */
+    @Transactional(readOnly = true)
+    public TrainerResponse findAssignable(Long trainerId)
+    {
+        var trainer = findOrFail(trainerId);
+
+        if (!trainer.isActive())
+        {
+            throw new BusinessException(ErrorCode.TRANSFER_TARGET_INVALID);
+        }
+
+        return TrainerResponse.from(trainer);
+    }
+
+    /** The same profile, plus the two checks a caseload transfer adds on top. */
+    @Transactional(readOnly = true)
+    public TrainerResponse findTransferTarget(Long fromTrainerId, Long toTrainerId)
+    {
+        findOrFail(fromTrainerId);
+
+        if (fromTrainerId.equals(toTrainerId))
+        {
+            throw new BusinessException(ErrorCode.TRANSFER_TARGET_INVALID);
+        }
+
+        return findAssignable(toTrainerId);
+    }
+
     private Trainer findOrFail(Long trainerId)
     {
         return trainerRepository.findById(trainerId)

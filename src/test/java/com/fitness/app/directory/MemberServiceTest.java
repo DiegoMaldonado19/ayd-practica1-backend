@@ -14,11 +14,13 @@ import com.fitness.app.iam.dto.UserResponse;
 import com.fitness.app.iam.model.UserRole;
 import com.fitness.app.iam.model.UserStatus;
 import com.fitness.app.iam.model.VerificationChannel;
+import com.fitness.app.training.TrainerAssignmentService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -37,12 +39,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest
 {
-    private static final Long PERSON_ID = 7L;
-    private static final Long MEMBER_ID = 3L;
+    private static final Long PERSON_ID  = 7L;
+    private static final Long MEMBER_ID  = 3L;
+    private static final Long TRAINER_ID = 4L;
 
     @Mock private MemberRepository memberRepository;
     @Mock private PersonService    personService;
     @Mock private UserService      userService;
+    @Mock private TrainerService   trainerService;
+
+    /** Deferred in the service to keep directory -> training -> notification out of a bean cycle. */
+    @Mock private ObjectProvider<TrainerAssignmentService> trainerAssignmentServiceProvider;
+    @Mock private TrainerAssignmentService                 trainerAssignmentService;
 
     @InjectMocks private MemberService memberService;
 
@@ -90,6 +98,33 @@ class MemberServiceTest
         assertEquals(ErrorCode.FORBIDDEN_RESOURCE,
                      assertThrows(BusinessException.class,
                                   () -> memberService.findById(MEMBER_ID, principal(UserRole.MEMBER)))
+                             .getErrorCode());
+    }
+
+    @Test
+    void letsATrainerReadTheFileOfAnAssignedMember()
+    {
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(member()));
+        when(trainerService.findTrainerIdByUser(principal(UserRole.TRAINER))).thenReturn(TRAINER_ID);
+        when(trainerAssignmentServiceProvider.getObject()).thenReturn(trainerAssignmentService);
+        when(trainerAssignmentService.isAssignedTo(TRAINER_ID, MEMBER_ID)).thenReturn(true);
+
+        assertEquals(MEMBER_ID, memberService.findById(MEMBER_ID, principal(UserRole.TRAINER)).memberId());
+    }
+
+    @Test
+    void hidesTheFileOfAMemberTheTrainerIsNotAssignedTo()
+    {
+        // "El entrenador solo ve a los suyos" (§3.2): the open row in
+        // trainer_assignment is what makes a member theirs.
+        when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(member()));
+        when(trainerService.findTrainerIdByUser(principal(UserRole.TRAINER))).thenReturn(TRAINER_ID);
+        when(trainerAssignmentServiceProvider.getObject()).thenReturn(trainerAssignmentService);
+        when(trainerAssignmentService.isAssignedTo(TRAINER_ID, MEMBER_ID)).thenReturn(false);
+
+        assertEquals(ErrorCode.TRAINER_SCOPE_VIOLATION,
+                     assertThrows(BusinessException.class,
+                                  () -> memberService.findById(MEMBER_ID, principal(UserRole.TRAINER)))
                              .getErrorCode());
     }
 
