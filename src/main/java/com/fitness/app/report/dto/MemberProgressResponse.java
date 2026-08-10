@@ -23,8 +23,14 @@ public record MemberProgressResponse(
         @JsonProperty("body_fat_percent")
         BigDecimal bodyFatPercent,
 
-        @JsonProperty("muscle_mass_kg")
-        BigDecimal muscleMassKg,
+        @JsonProperty("waist_cm")
+        BigDecimal waistCm,
+
+        @JsonProperty("arm_cm")
+        BigDecimal armCm,
+
+        @JsonProperty("leg_cm")
+        BigDecimal legCm,
 
         @JsonProperty("notes")
         String notes)

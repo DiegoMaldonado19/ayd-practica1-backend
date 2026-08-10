@@ -17,7 +17,7 @@ public record NutritionAdherenceResponse(
         BigDecimal averageDailyCalories,
 
         @JsonProperty("nutrition_goal_calories")
-        short nutritionGoalCalories,
+        BigDecimal nutritionGoalCalories,
 
         @JsonProperty("days_within_goal")
         long daysWithinGoal,

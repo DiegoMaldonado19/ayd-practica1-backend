@@ -49,17 +49,17 @@ public class ReportRepository
                   LEFT JOIN membership m ON p.membership_id = m.membership_id
                   LEFT JOIN membership_plan mp ON m.membership_plan_id = mp.membership_plan_id
                  WHERE p.status = 'CONFIRMED'
-                   AND p.paid_at >= :from
-                   AND p.paid_at < :to
+                   AND (CAST(:from AS TIMESTAMP) IS NULL OR p.paid_at >= :from)
+                   AND (CAST(:to AS TIMESTAMP) IS NULL OR p.paid_at < :to)
                    AND (CAST(:planId AS BIGINT) IS NULL OR mp.membership_plan_id = :planId)
-                 GROUP BY DATE_TRUNC(:truncUnit, p.paid_at), COALESCE(mp.name, 'GUEST_PASS')
+                 GROUP BY period, plan_name
                  ORDER BY period DESC, plan_name
                 """;
 
         var params = new MapSqlParameterSource()
                 .addValue("truncUnit", truncUnit)
-                .addValue("from", from.atStartOfDay())
-                .addValue("to", to.atStartOfDay())
+                .addValue("from", from == null ? null : from.atStartOfDay())
+                .addValue("to", to == null ? null : to.atStartOfDay())
                 .addValue("planId", planId);
 
         return jdbcTemplate.query(sql, params, revenueRowMapper());
@@ -109,13 +109,13 @@ public class ReportRepository
                      WHERE start_date <= :asOf
                      ORDER BY member_id, start_date DESC
                 )
-                SELECT mp.plan_name,
+                SELECT mp.name AS plan_name,
                        lm.status,
                        COUNT(lm.member_id) AS member_count
                   FROM latest_membership lm
                   JOIN membership_plan mp ON lm.membership_plan_id = mp.membership_plan_id
-                 GROUP BY mp.plan_name, lm.status
-                 ORDER BY mp.plan_name, lm.status
+                 GROUP BY mp.name, lm.status
+                 ORDER BY mp.name, lm.status
                 """;
 
         var params = new MapSqlParameterSource()
@@ -131,29 +131,34 @@ public class ReportRepository
     {
         String sql = """
                 SELECT cs.class_session_id,
-                       gc.class_name,
+                       gc.name AS class_name,
                        CONCAT(p.first_name, ' ', p.last_name) AS trainer_name,
                        cs.session_date,
                        cs.start_time,
                        COUNT(CASE WHEN ce.status = 'ATTENDED' THEN 1 END) AS attended_count,
                        COUNT(CASE WHEN ce.status = 'ABSENT' THEN 1 END) AS absent_count,
                        COUNT(CASE WHEN ce.status = 'CANCELLED' THEN 1 END) AS cancelled_count,
+                       -- Denominator is the seats actually kept, which is how
+                       -- ix_enroll_session_active defines an occupied seat. Counting
+                       -- the cancelled ones would report 50% for a session where the
+                       -- only member who kept their seat did show up.
                        CASE
-                           WHEN COUNT(ce.enrollment_id) > 0
-                           THEN ROUND(100.0 * COUNT(CASE WHEN ce.status = 'ATTENDED' THEN 1 END) / COUNT(ce.enrollment_id), 2)
+                           WHEN COUNT(CASE WHEN ce.status <> 'CANCELLED' THEN 1 END) > 0
+                           THEN ROUND(100.0 * COUNT(CASE WHEN ce.status = 'ATTENDED' THEN 1 END)
+                                            / COUNT(CASE WHEN ce.status <> 'CANCELLED' THEN 1 END), 2)
                            ELSE 0
                        END AS attendance_rate
                   FROM class_session cs
                   JOIN group_class gc ON cs.group_class_id = gc.group_class_id
-                  JOIN trainer t ON gc.trainer_id = t.trainer_id
+                  JOIN trainer t ON cs.trainer_id = t.trainer_id
                   JOIN employee e ON t.employee_id = e.employee_id
                   JOIN person p ON e.person_id = p.person_id
                   LEFT JOIN class_enrollment ce ON cs.class_session_id = ce.class_session_id
-                 WHERE cs.session_date >= :from
-                   AND cs.session_date <= :to
+                 WHERE (CAST(:from AS DATE) IS NULL OR cs.session_date >= :from)
+                   AND (CAST(:to AS DATE) IS NULL OR cs.session_date <= :to)
                    AND (CAST(:groupClassId AS BIGINT) IS NULL OR cs.group_class_id = :groupClassId)
-                   AND (CAST(:trainerId AS BIGINT) IS NULL OR gc.trainer_id = :trainerId)
-                 GROUP BY cs.class_session_id, gc.class_name, p.first_name, p.last_name, cs.session_date, cs.start_time
+                   AND (CAST(:trainerId AS BIGINT) IS NULL OR cs.trainer_id = :trainerId)
+                 GROUP BY cs.class_session_id, gc.name, p.first_name, p.last_name, cs.session_date, cs.start_time
                  ORDER BY cs.session_date, cs.start_time
                 """;
 
@@ -173,23 +178,25 @@ public class ReportRepository
     {
         String sql = """
                 SELECT gc.group_class_id,
-                       gc.class_name,
+                       gc.name AS class_name,
                        COUNT(DISTINCT cs.class_session_id) AS total_sessions,
-                       COUNT(ce.enrollment_id) AS total_enrollments,
+                       COUNT(DISTINCT ce.class_enrollment_id) AS total_enrollments,
                        CASE
                            WHEN COUNT(DISTINCT cs.class_session_id) > 0
-                           THEN ROUND(100.0 * COUNT(ce.enrollment_id) / (COUNT(DISTINCT cs.class_session_id) * gc.max_capacity), 2)
+                           THEN ROUND(100.0 * COUNT(DISTINCT ce.class_enrollment_id) / (COUNT(DISTINCT cs.class_session_id) * gc.max_capacity), 2)
                            ELSE 0
                        END AS average_occupancy_rate,
                        COUNT(DISTINCT CASE WHEN we.waitlist_entry_id IS NOT NULL THEN cs.class_session_id END) AS waitlist_activations_count
                   FROM group_class gc
                   LEFT JOIN class_session cs ON gc.group_class_id = cs.group_class_id
-                       AND cs.session_date >= :from
-                       AND cs.session_date <= :to
+                       AND (CAST(:from AS DATE) IS NULL OR cs.session_date >= :from)
+                       AND (CAST(:to AS DATE) IS NULL OR cs.session_date <= :to)
                   LEFT JOIN class_enrollment ce ON cs.class_session_id = ce.class_session_id
                   LEFT JOIN waitlist_entry we ON cs.class_session_id = we.class_session_id
-                 WHERE gc.active = TRUE
-                 GROUP BY gc.group_class_id, gc.class_name, gc.max_capacity
+                 -- No filter on gc.active: DELETE /group-classes/{id} is a logical
+                 -- delete that keeps the history, and a class that ran all quarter
+                 -- before being retired is exactly the demand this report measures.
+                 GROUP BY gc.group_class_id, gc.name, gc.max_capacity
                  ORDER BY total_enrollments DESC
                 """;
 
@@ -237,12 +244,14 @@ public class ReportRepository
                        pm.weight_kg,
                        pm.weight_kg - LAG(pm.weight_kg) OVER (ORDER BY pm.measured_on) AS weight_change_kg,
                        pm.body_fat_percent,
-                       pm.muscle_mass_kg,
+                       pm.waist_cm,
+                       pm.arm_cm,
+                       pm.leg_cm,
                        pm.notes
                   FROM progress_measurement pm
                  WHERE pm.member_id = :memberId
-                   AND pm.measured_on >= :from
-                   AND pm.measured_on <= :to
+                   AND (CAST(:from AS DATE) IS NULL OR pm.measured_on >= :from)
+                   AND (CAST(:to AS DATE) IS NULL OR pm.measured_on <= :to)
                  ORDER BY pm.measured_on ASC
                 """;
 
@@ -270,8 +279,8 @@ public class ReportRepository
                   JOIN person p ON gp.person_id = p.person_id
                   LEFT JOIN payment pay ON gp.guest_pass_id = pay.guest_pass_id
                        AND pay.status = 'CONFIRMED'
-                 WHERE gp.checked_in_at::DATE >= :from
-                   AND gp.checked_in_at::DATE <= :to
+                 WHERE (CAST(:from AS DATE) IS NULL OR gp.checked_in_at::DATE >= :from)
+                   AND (CAST(:to AS DATE) IS NULL OR gp.checked_in_at::DATE <= :to)
                    AND (CAST(:passType AS VARCHAR) IS NULL OR gp.pass_type = :passType)
                  ORDER BY gp.checked_in_at DESC
                 """;
@@ -297,8 +306,8 @@ public class ReportRepository
                       FROM meal m
                       JOIN meal_item mi ON m.meal_id = mi.meal_id
                       JOIN food f ON mi.food_id = f.food_id
-                     WHERE m.log_date >= :from
-                       AND m.log_date <= :to
+                     WHERE (CAST(:from AS DATE) IS NULL OR m.log_date >= :from)
+                       AND (CAST(:to AS DATE) IS NULL OR m.log_date <= :to)
                      GROUP BY m.member_id, m.log_date
                 ),
                 member_stats AS (
@@ -306,16 +315,18 @@ public class ReportRepository
                            CONCAT(p.first_name, ' ', p.last_name) AS member_name,
                            COUNT(DISTINCT dc.log_date) AS days_logged,
                            ROUND(AVG(dc.total_calories), 0) AS average_daily_calories,
-                           ng.calorie_goal,
-                           ng.tolerance_percent,
-                           COUNT(CASE WHEN dc.total_calories >= ng.calorie_goal * (1.0 - ng.tolerance_percent / 100.0)
-                                   AND dc.total_calories <= ng.calorie_goal * (1.0 + ng.tolerance_percent / 100.0)
+                           ng.daily_calories AS calorie_goal,
+                           COUNT(CASE WHEN dc.total_calories >= ng.daily_calories * (1.0 - ng.tolerance_percent / 100.0)
+                                   AND dc.total_calories <= ng.daily_calories * (1.0 + ng.tolerance_percent / 100.0)
                                  THEN 1 END) AS days_within_goal
                       FROM daily_calories dc
                       JOIN member m ON dc.member_id = m.member_id
                       JOIN person p ON m.person_id = p.person_id
                       JOIN nutrition_goal ng ON m.member_id = ng.member_id
-                     GROUP BY m.member_id, p.first_name, p.last_name, ng.calorie_goal, ng.tolerance_percent
+                     -- uq_goal_current: the goal in force is the one still open.
+                     -- Without it every superseded goal multiplies the member's rows.
+                     WHERE ng.end_date IS NULL
+                     GROUP BY m.member_id, p.first_name, p.last_name, ng.daily_calories, ng.tolerance_percent
                 )
                 SELECT member_name,
                        days_logged,
@@ -427,7 +438,9 @@ public class ReportRepository
                 rs.getBigDecimal("weight_kg"),
                 rs.getBigDecimal("weight_change_kg"),
                 rs.getBigDecimal("body_fat_percent"),
-                rs.getBigDecimal("muscle_mass_kg"),
+                rs.getBigDecimal("waist_cm"),
+                rs.getBigDecimal("arm_cm"),
+                rs.getBigDecimal("leg_cm"),
                 rs.getString("notes")
         );
     }
@@ -450,7 +463,7 @@ public class ReportRepository
                 rs.getString("member_name"),
                 rs.getLong("days_logged"),
                 rs.getBigDecimal("average_daily_calories"),
-                rs.getShort("calorie_goal"),
+                rs.getBigDecimal("calorie_goal"),
                 rs.getLong("days_within_goal"),
                 rs.getDouble("adherence_rate")
         );
