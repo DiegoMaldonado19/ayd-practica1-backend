@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gesti\u00f3n de Gimnasio\n\nColecci\u00f3n \u00fanica del backend. Una carpeta por m\u00f3dulo implementado; cada m\u00f3dulo nuevo agrega la suya.\n\n| Carpeta | M\u00f3dulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** \u00b7 **Users** | `iam` | 12 | `03-API-REST \u00a73.1` |\n| **Members** \u00b7 **Employees** \u00b7 **Trainers** | `directory` | 18 | `03-API-REST \u00a73.2` |\n| **Membership Plans** \u00b7 **Memberships** | `membership` | 14 | `03-API-REST \u00a73.3` |\n| **Visits** \u00b7 **Guest Passes** | `access` | 5 | `03-API-REST \u00a73.5` |\n| **Classes** | `classes` | 23 | `03-API-REST \u00a73.6` |\n| **Notifications** | `notification` | 2 | `03-API-REST \u00a73.9` |\n| **Reports** | `report` | 9 | `03-API-REST \u00a73.10` |\n\nBase: `http://localhost:8080/api/v1` \u00b7 Formato: JSON en `snake_case` \u00b7 Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## C\u00f3mo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth \u203a Login**. El script guarda `access_token` autom\u00e1ticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon p\u00fablicas: c\u00e1mbialas en el servidor con **Users \u203a Cambiar contrase\u00f1a propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users \u203a Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dej\u00f3 Members. Ejecutar la colecci\u00f3n completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta \u2014el invitado del pase de prueba es una persona sin\ncredenciales\u2014 y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que adem\u00e1s es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos c\u00f3digos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se env\u00edan.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users \u203a Doble factor propio**.\n2. **Auth \u203a Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el c\u00f3digo de 6 d\u00edgitos. D\u00f3nde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | D\u00f3nde llega el c\u00f3digo |\n   |---|---|\n   | vac\u00edas | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth \u203a Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vac\u00edas.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el c\u00f3digo sale hacia una direcci\u00f3n\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el env\u00edo s\u00ed funciona.\n\nRepetir el login emite un reto nuevo: esa es tambi\u00e9n la forma de reenviar el c\u00f3digo.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qu\u00e9 bot\u00f3n ofrecer. El cat\u00e1logo completo de c\u00f3digos est\u00e1 en\n`Docs/03-API-REST.md \u00a74`.\n\n**Bloqueo de cuenta:** cinco contrase\u00f1as incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petici\u00f3n de credenciales inv\u00e1lidas de esta colecci\u00f3n usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todav\u00eda no est\u00e1\n\nLos endpoints de `03-API-REST \u00a73.2` ya est\u00e1n completos. Siguen faltando tres filtros y un dato\nderivado: `plan_code` y `membership_status` en `GET /members`, `has_capacity` en `GET /trainers`, y la\ncarga actual en `GET /trainers/{id}`. Todos se calculan sobre `membership` o `trainer_assignment`, y\n`directory` no consulta las tablas de otro m\u00f3dulo.\n\nDe `notification` se cablean ocho de los diez tipos. `TRAINER_ALERT` y `PAYMENT_CONFIRMED` pertenecen a\n`training` y `billing`, que no existen: el enum los declara para espejar `ck_notification_type`, pero\nnadie los emite todav\u00eda.\n\nLas dos tareas programadas \u2014`MEMBERSHIP_EXPIRING` a las 07:00 y `MEMBERSHIP_EXPIRED` a las 00:05\u2014 no\ntienen endpoint que las dispare, as\u00ed que **no se pueden probar desde la colecci\u00f3n**. Para verlas hay\nque contratar una membres\u00eda que venza dentro de `gym.membership.expiry-notice-days` y esperar al\ncron, o adelantar su expresi\u00f3n en `application.yml`.\n\n---\n\n## Ejecuci\u00f3n automatizada\n\nCada petici\u00f3n trae aserciones, as\u00ed que la colecci\u00f3n corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, as\u00ed que la colecci\u00f3n se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (c\u00f3digo de verificaci\u00f3n, c\u00f3digo de recuperaci\u00f3n) se omiten\nsolas cuando la variable est\u00e1 vac\u00eda.",
+    "description": "# Sistema de Gesti\u00f3n de Gimnasio\n\nColecci\u00f3n \u00fanica del backend. Una carpeta por m\u00f3dulo implementado; cada m\u00f3dulo nuevo agrega la suya.\n\n| Carpeta | M\u00f3dulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** \u00b7 **Users** | `iam` | 12 | `03-API-REST \u00a73.1` |\n| **Members** \u00b7 **Employees** \u00b7 **Trainers** | `directory` | 18 | `03-API-REST \u00a73.2` |\n| **Membership Plans** \u00b7 **Memberships** | `membership` | 14 | `03-API-REST \u00a73.3` |\n| **Visits** \u00b7 **Guest Passes** | `access` | 5 | `03-API-REST \u00a73.5` |\n| **Classes** | `classes` | 23 | `03-API-REST \u00a73.6` |\n| **Notifications** | `notification` | 2 | `03-API-REST \u00a73.9` |\n| **Reports** | `report` | 9 | `03-API-REST \u00a73.10` |\n| **Reglas del enunciado** | \u2014 | \u2014 | Reglas parametrizables y bloqueo de cuenta |\n\nBase: `http://localhost:8080/api/v1` \u00b7 Formato: JSON en `snake_case` \u00b7 Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## C\u00f3mo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth \u203a Login**. El script guarda `access_token` autom\u00e1ticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon p\u00fablicas: c\u00e1mbialas en el servidor con **Users \u203a Cambiar contrase\u00f1a propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users \u203a Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dej\u00f3 Members. Ejecutar la colecci\u00f3n completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta \u2014el invitado del pase de prueba es una persona sin\ncredenciales\u2014 y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que adem\u00e1s es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos c\u00f3digos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se env\u00edan.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users \u203a Doble factor propio**.\n2. **Auth \u203a Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el c\u00f3digo de 6 d\u00edgitos. D\u00f3nde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | D\u00f3nde llega el c\u00f3digo |\n   |---|---|\n   | vac\u00edas | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth \u203a Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vac\u00edas.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el c\u00f3digo sale hacia una direcci\u00f3n\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el env\u00edo s\u00ed funciona.\n\nRepetir el login emite un reto nuevo: esa es tambi\u00e9n la forma de reenviar el c\u00f3digo.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qu\u00e9 bot\u00f3n ofrecer. El cat\u00e1logo completo de c\u00f3digos est\u00e1 en\n`Docs/03-API-REST.md \u00a74`.\n\n**Bloqueo de cuenta:** cinco contrase\u00f1as incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petici\u00f3n de credenciales inv\u00e1lidas de esta colecci\u00f3n usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todav\u00eda no est\u00e1\n\nLos endpoints de `03-API-REST \u00a73.2` ya est\u00e1n completos. Siguen faltando tres filtros y un dato\nderivado: `plan_code` y `membership_status` en `GET /members`, `has_capacity` en `GET /trainers`, y la\ncarga actual en `GET /trainers/{id}`. Todos se calculan sobre `membership` o `trainer_assignment`, y\n`directory` no consulta las tablas de otro m\u00f3dulo.\n\nDe `03-API-REST` se implementan **83 de las 127 rutas**. Las 44 que faltan son las de tres m\u00f3dulos que\ntodav\u00eda no existen: `billing` (`/payments`, `/promotions`), `nutrition` (`/foods`, `/meals`,\n`/members/{id}/nutrition-*`) y el grueso de `training` (`/exercises`, `/routines`, `/measurements`,\n`/trainer-alerts`, `/trainer-assignments`). Por eso los reportes de ingresos, de progreso f\u00edsico y de\nadherencia nutricional responden `200` con una lista vac\u00eda: la consulta es correcta y no hay filas que\ndevolver.\n\nLa asignaci\u00f3n de entrenador es la \u00fanica ruta implementada que se aparta del documento: est\u00e1 en\n`POST /members/{id}/trainer` y no en `POST /trainer-assignments`, porque `training` a\u00fan no tiene\ncontrolador propio.\n\nDe `notification` se cablean ocho de los diez tipos. `TRAINER_ALERT` y `PAYMENT_CONFIRMED` pertenecen a\n`training` y `billing`, que no existen: el enum los declara para espejar `ck_notification_type`, pero\nnadie los emite todav\u00eda.\n\nLas dos tareas programadas \u2014`MEMBERSHIP_EXPIRING` a las 07:00 y `MEMBERSHIP_EXPIRED` a las 00:05\u2014 no\ntienen endpoint que las dispare, as\u00ed que **no se pueden probar desde la colecci\u00f3n**. Para verlas hay\nque contratar una membres\u00eda que venza dentro de `gym.membership.expiry-notice-days` y esperar al\ncron, o adelantar su expresi\u00f3n en `application.yml`.\n\n---\n\n## Ejecuci\u00f3n automatizada\n\nCada petici\u00f3n trae aserciones, as\u00ed que la colecci\u00f3n corre completa sin Postman:\n\n```bash\nnpm --prefix ../scripts install     # solo la primera vez\nnode ../scripts/validate-api.js     # o: APP_LOG=/ruta/app.log node ../scripts/validate-api.js\n```\n\nEl script corre esta misma colecci\u00f3n y devuelve un c\u00f3digo de salida distinto de cero si falla una sola\naserci\u00f3n, as\u00ed que sirve tal cual en un *pipeline*. Hace una cosa que Postman no puede hacer solo:\n**leer los c\u00f3digos temporales**. El c\u00f3digo de doble factor y el de recuperaci\u00f3n solo se env\u00edan al\nusuario; sin servidor de correo el backend los escribe en su log, y el script los toma de ah\u00ed y los\ninyecta en la variable correspondiente. Sin \u00e9l, las peticiones que dependen de un c\u00f3digo se omiten\nsolas \u2014as\u00ed siguen funcionando a mano en Postman\u2014 y con \u00e9l se ejecutan las 212.\n\nTambi\u00e9n se puede correr con newman a secas, aceptando esas omisiones:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, as\u00ed que la colecci\u00f3n se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\n---\n\n## Reglas del enunciado\n\nLa \u00faltima carpeta comprueba las reglas que el enunciado deja a criterio del equipo, m\u00e1s el\nendurecimiento del acceso. Ninguna se verificaba antes, y todas viven en `gym.*` de `application.yml`:\ncambiar uno de esos valores sin cambiar la carpeta hace fallar la corrida, que es justo lo que se\nbusca.\n\n| Regla | Valor | Peticiones |\n|---|---|---|\n| Congelamientos por ciclo | 2 veces, 15 d\u00edas, ciclo de 90 | `Primer/Segundo/Tercer congelamiento` |\n| Clases por semana del Plan Premium | 3 | `Inscripci\u00f3n 1..3` y `Cuarta inscripci\u00f3n` |\n| Intentos por c\u00f3digo de verificaci\u00f3n | 3 | `C\u00f3digo equivocado (intento 1..3)` |\n| Contrase\u00f1as fallidas antes del bloqueo | 5 | `Contrase\u00f1a incorrecta (intento 1..5)` |\n\nLa carpeta crea sus propios socios y clases y deja una cuenta bloqueada a prop\u00f3sito: no toca ninguna\nvariable de las carpetas anteriores.\n\nEl tope de pases gratuitos (`gym.guest-pass.max-free-per-person`) y el margen de cancelaci\u00f3n\n(`gym.classes.cancellation-window-hours`) ya se comprueban en **Access** y **Classes**.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -530,6 +530,54 @@
       "value": "",
       "type": "string",
       "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "rules_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio de las pruebas de congelamiento."
+    },
+    {
+      "key": "rules_membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Su membresia Basica."
+    },
+    {
+      "key": "rules_weekly_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio Premium de la prueba del limite semanal."
+    },
+    {
+      "key": "rules_weekly_sessions",
+      "value": "",
+      "type": "string",
+      "description": "Sesiones de la misma semana ISO, separadas por coma."
+    },
+    {
+      "key": "rules_blocked_username",
+      "value": "",
+      "type": "string",
+      "description": "Cuenta que se deja bloqueada a proposito."
+    },
+    {
+      "key": "rules_blocked_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona de esa cuenta."
+    },
+    {
+      "key": "rules_challenge_id",
+      "value": "",
+      "type": "string",
+      "description": "Reto de doble factor de esa cuenta."
+    },
+    {
+      "key": "rules_monday",
+      "value": "",
+      "type": "string",
+      "description": "Lunes de la semana ISO usada por el limite semanal."
     }
   ],
   "item": [
@@ -8157,8 +8205,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=MONTH",
-              "protocol": "http",
+              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=month",
               "host": [
                 "{{base_url}}"
               ],
@@ -8179,13 +8226,35 @@
                 },
                 {
                   "key": "group_by",
-                  "value": "MONTH",
+                  "value": "month",
                   "disabled": false
                 }
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la lista de ingresos\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"El neto de cada periodo es el bruto menos el descuento\", function () {",
+                  "    pm.response.json().forEach(function (fila) {",
+                  "        pm.expect(fila).to.have.property(\"period\");",
+                  "        pm.expect(fila).to.have.property(\"plan_name\");",
+                  "        pm.expect(Number(fila.net_amount)).to.eql(Number(fila.gross_amount) - Number(fila.discount_amount));",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Revenue (CSV)",
@@ -8203,8 +8272,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=MONTH&format=csv",
-              "protocol": "http",
+              "raw": "{{base_url}}/reports/revenue?from=2026-01-01&to=2026-12-31&group_by=month&format=csv",
               "host": [
                 "{{base_url}}"
               ],
@@ -8225,7 +8293,7 @@
                 },
                 {
                   "key": "group_by",
-                  "value": "MONTH",
+                  "value": "month",
                   "disabled": false
                 },
                 {
@@ -8236,7 +8304,22 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 como descarga CSV\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/csv\");",
+                  "    pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"revenue.csv\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Memberships Expiring",
@@ -8255,7 +8338,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/memberships?status=ACTIVE",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8272,7 +8354,29 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con las membresias por vencer\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"El filtro status se respeta y cada fila trae los dias restantes\", function () {",
+                  "    pm.response.json().forEach(function (fila) {",
+                  "        pm.expect(fila.status).to.eql(\"ACTIVE\");",
+                  "        pm.expect(fila.days_to_expiry).to.be.a(\"number\");",
+                  "        pm.expect(fila.plan_name).to.be.a(\"string\");",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Member Distribution",
@@ -8291,7 +8395,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/member-distribution",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8302,7 +8405,91 @@
               "query": []
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la distribucion\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Reparte a los socios que la coleccion dio de alta\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.length).to.be.above(0);",
+                  "",
+                  "    filas.forEach(function (fila) {",
+                  "        pm.expect(fila.plan_name).to.be.a(\"string\");",
+                  "        pm.expect([\"ACTIVE\", \"FROZEN\", \"EXPIRED\", \"CANCELLED\"]).to.include(fila.status);",
+                  "        pm.expect(fila.member_count).to.be.above(0);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Member Distribution (CSV)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-distribution?format=csv",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-distribution"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Misma consulta en CSV. Es la unica peticion que comprueba la cabecera y las filas que escribe ReportCsv; el CSV de ingresos va vacio mientras no exista el modulo de cobros."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 como descarga CSV\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/csv\");",
+                  "    pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"member-distribution.csv\");",
+                  "});",
+                  "",
+                  "pm.test(\"La primera linea es la cabecera y hay al menos una fila\", function () {",
+                  "    const lineas = pm.response.text().trim().split(\"\\n\");",
+                  "",
+                  "    pm.expect(lineas[0].trim()).to.eql(\"plan_name,status,member_count\");",
+                  "    pm.expect(lineas.length).to.be.above(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Class Attendance",
@@ -8321,7 +8508,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/class-attendance?from=2026-01-01&to=2026-12-31",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8343,7 +8529,37 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la asistencia por sesion\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Incluye la sesion que la coleccion cerro con asistencia marcada\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.length).to.be.above(0);",
+                  "    pm.expect(filas.some(function (fila) { return fila.attended_count > 0; })).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"La tasa se calcula sobre los lugares conservados, no sobre los cancelados\", function () {",
+                  "    pm.response.json().forEach(function (fila) {",
+                  "        const conservados = fila.attended_count + fila.absent_count;",
+                  "        const esperada    = conservados > 0 ? Math.round(10000 * fila.attended_count / conservados) / 100 : 0;",
+                  "",
+                  "        pm.expect(fila.attendance_rate).to.eql(esperada);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Class Demand",
@@ -8362,7 +8578,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/class-demand?from=2026-01-01&to=2026-12-31",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8384,7 +8599,36 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la demanda por clase\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Cuenta la lista de espera que la coleccion activo\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.length).to.be.above(0);",
+                  "    pm.expect(filas.some(function (fila) { return fila.waitlist_activations_count > 0; })).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"La clase dada de baja sigue en el historial\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.some(function (fila) {",
+                  "        return String(fila.class_id) === String(pm.collectionVariables.get(\"group_class_id\"));",
+                  "    })).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Trainer Load",
@@ -8403,7 +8647,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/trainer-load",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8414,7 +8657,31 @@
               "query": []
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la carga de cada entrenador\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Los cupos libres son la carga maxima menos los socios asignados\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.length).to.be.above(0);",
+                  "",
+                  "    filas.forEach(function (fila) {",
+                  "        pm.expect(fila.available_slots).to.eql(fila.max_member_load - fila.assigned_member_count);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Member Progress",
@@ -8433,7 +8700,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/member-progress?member_id=1",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8450,7 +8716,71 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el historial de mediciones\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Member Progress de un socio inexistente",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-progress?member_id=99999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-progress"
+              ],
+              "query": [
+                {
+                  "key": "member_id",
+                  "value": "99999999",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "El reporte valida el socio antes de consultar sus mediciones."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 404 MEMBER_NOT_FOUND\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"MEMBER_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Guest Pass Usage",
@@ -8469,7 +8799,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/guest-passes?from=2026-01-01&to=2026-12-31",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8491,7 +8820,32 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el uso de pases\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Trae los pases que registro la carpeta Access\", function () {",
+                  "    const filas = pm.response.json();",
+                  "",
+                  "    pm.expect(filas.length).to.be.above(0);",
+                  "",
+                  "    filas.forEach(function (fila) {",
+                  "        pm.expect([\"FREE_TRIAL\", \"PAID_DAY_PASS\", \"MEMBER_GUEST\"]).to.include(fila.pass_type);",
+                  "        pm.expect(fila.converted_to_member).to.be.a(\"boolean\");",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Nutrition Adherence",
@@ -8510,7 +8864,6 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/reports/nutrition-adherence?from=2026-01-01&to=2026-12-31&limit=10",
-              "protocol": "http",
               "host": [
                 "{{base_url}}"
               ],
@@ -8537,6 +8890,2542 @@
               ]
             }
           },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la adherencia nutricional\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reporte con un formato invalido",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-distribution?format=xml",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-distribution"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "xml",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Un valor de enum que no existe es un error del cliente: 400, no 500."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VALIDATION_ERROR y no 500\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reporte pedido por un socio",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/member-distribution",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "member-distribution"
+              ],
+              "query": []
+            },
+            "description": "03-API-REST \u00a73.10: los diez reportes son de rol A."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. Solo un rol distinto de ADMIN prueba el 403.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403: los reportes son solo del administrador\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reglas del enunciado",
+      "description": "Las reglas parametrizables del enunciado y el endurecimiento del acceso. Cada una vive en\n`gym.*` de `application.yml`, y ninguna se comprobaba antes: la carpeta existe para que un cambio de\nesos valores no pase inadvertido.\n\n| Regla | Valor | Donde |\n|---|---|---|\n| Congelamientos por ciclo | 2 veces, 15 dias, ciclo de 90 | `gym.freeze` |\n| Clases por semana del Plan Premium | 3 | `membership_plan.weekly_class_limit` |\n| Intentos por codigo de verificacion | 3 | `VerificationCodeService` |\n| Contrasenas fallidas antes del bloqueo | 5 | `AuthService` |\n\nSe ejecuta al final porque crea sus propios socios y clases: no depende de ninguna variable de las\ncarpetas anteriores y no altera las que ellas dejaron.",
+      "item": [
+        {
+          "name": "Alta del socio de reglas",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{rules_document}}\",\n    \"first_name\": \"Reglas\",\n    \"last_name\": \"Congelamiento\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1993-06-15\",\n    \"email\": \"{{rules_email}}\",\n    \"phone\": \"55551101\"\n  },\n  \"emergency_contact_name\": \"Contacto Reglas\",\n  \"emergency_contact_phone\": \"55551102\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ],
+              "query": []
+            },
+            "description": "Socio propio: las pruebas de congelamiento agotan el cupo del ciclo y no deben tocar al de otra carpeta."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_document\", \"8\" + sufijo);",
+                  "pm.collectionVariables.set(\"rules_email\", \"reglas\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_member_id\", pm.response.json().member_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Basico al socio de reglas",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_member_id}},\n  \"membership_plan_id\": {{basic_plan_id}},\n  \"start_date\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// start_date es DATE: la marca ISO completa no sirve.",
+                  "pm.collectionVariables.set(\"rules_today\", new Date().toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la membresia activa\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ACTIVE\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_membership_id\", pm.response.json().membership_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Congelar mas dias de los permitidos",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"TRAVEL\",\n  \"reason_detail\": \"Veinte dias seguidos superan el tope del ciclo.\",\n  \"expected_end_date\": \"{{rules_long_freeze_end}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "freezes"
+              ],
+              "query": []
+            },
+            "description": "gym.freeze.max-days-per-cycle = 15: veinte dias proyectados no caben en el ciclo."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const fin = new Date();",
+                  "",
+                  "fin.setDate(fin.getDate() + 20);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_long_freeze_end\", fin.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 FREEZE_LIMIT_REACHED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FREEZE_LIMIT_REACHED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Primer congelamiento del ciclo",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"TRAVEL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "freezes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 y queda en curso\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().in_progress).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reactivar tras el primero",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/reactivations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "reactivations"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 y vuelve a ACTIVE\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ACTIVE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Segundo congelamiento del ciclo",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"INJURY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "freezes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201: el segundo todavia cabe\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reactivar tras el segundo",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/reactivations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "reactivations"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Tercer congelamiento del ciclo",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"OTHER\",\n  \"reason_detail\": \"El tercero del trimestre.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "freezes"
+              ],
+              "query": []
+            },
+            "description": "gym.freeze.max-count-per-cycle = 2: el tercero del ciclo se rechaza."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 FREEZE_LIMIT_REACHED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FREEZE_LIMIT_REACHED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reactivar sin congelamiento en curso",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/reactivations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "reactivations"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 FREEZE_NOT_IN_PROGRESS\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FREEZE_NOT_IN_PROGRESS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cupo de congelamientos del ciclo",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/memberships/{{rules_membership_id}}/freezes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships",
+                "{{rules_membership_id}}",
+                "freezes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"El contador coincide con lo consumido y con gym.freeze\", function () {",
+                  "    const cupo = pm.response.json();",
+                  "",
+                  "    pm.expect(cupo.freezes_used_in_cycle).to.eql(2);",
+                  "    pm.expect(cupo.max_count_per_cycle).to.eql(2);",
+                  "    pm.expect(cupo.max_days_per_cycle).to.eql(15);",
+                  "    pm.expect(cupo.cycle_days).to.eql(90);",
+                  "    pm.expect(cupo.freezes).to.have.lengthOf(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio del limite semanal",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{rules_weekly_document}}\",\n    \"first_name\": \"Reglas\",\n    \"last_name\": \"Semanal\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1992-03-08\",\n    \"email\": \"{{rules_weekly_email}}\",\n    \"phone\": \"55551103\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_document\", \"9\" + sufijo);",
+                  "pm.collectionVariables.set(\"rules_weekly_email\", \"semanal\" + sufijo + \"@fitnessapp.local\");",
+                  "",
+                  "// El limite se cuenta sobre la semana ISO de la sesion. El lunes siguiente deja las",
+                  "// cuatro sesiones en el futuro y en una sola semana.",
+                  "const lunes = new Date();",
+                  "",
+                  "lunes.setDate(lunes.getDate() + ((8 - lunes.getDay()) % 7 || 7));",
+                  "",
+                  "pm.collectionVariables.set(\"rules_monday\", lunes.toISOString().slice(0, 10));",
+                  "pm.collectionVariables.set(\"rules_weekly_sessions\", \"\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_member_id\", pm.response.json().member_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Premium al socio semanal",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_weekly_member_id}},\n  \"membership_plan_id\": {{premium_plan_id}},\n  \"start_date\": \"{{rules_today}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con el plan Premium\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().plan.weekly_class_limit).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Clase de la semana 1",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{rules_class_code}}\",\n  \"name\": \"Crossfit reglas 1\",\n  \"discipline\": \"CROSSFIT\",\n  \"difficulty_level\": \"BEGINNER\",\n  \"trainer_id\": {{trainer_id}},\n  \"weekday\": \"MONDAY\",\n  \"start_time\": \"06:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"rules_class_code\", \"RG1\" + String(Date.now()).slice(-6));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_class_id_1\", pm.response.json().group_class_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sesion de la semana 1",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{rules_monday}}\",\n  \"to\": \"{{rules_sunday}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{rules_class_id_1}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{rules_class_id_1}}",
+                "sessions"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const domingo = new Date(pm.collectionVariables.get(\"rules_monday\") + \"T00:00:00Z\");",
+                  "",
+                  "domingo.setUTCDate(domingo.getUTCDate() + 6);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_sunday\", domingo.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con una sola sesion de esa semana\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json()).to.have.lengthOf(1);",
+                  "});",
+                  "",
+                  "const acumuladas = pm.collectionVariables.get(\"rules_weekly_sessions\");",
+                  "const sesion     = pm.response.json()[0].class_session_id;",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_sessions\", acumuladas ? acumuladas + \",\" + sesion : String(sesion));",
+                  "pm.collectionVariables.set(\"rules_session_1\", sesion);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Clase de la semana 2",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{rules_class_code}}\",\n  \"name\": \"Crossfit reglas 2\",\n  \"discipline\": \"CROSSFIT\",\n  \"difficulty_level\": \"BEGINNER\",\n  \"trainer_id\": {{trainer_id}},\n  \"weekday\": \"TUESDAY\",\n  \"start_time\": \"07:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"rules_class_code\", \"RG2\" + String(Date.now()).slice(-6));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_class_id_2\", pm.response.json().group_class_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sesion de la semana 2",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{rules_monday}}\",\n  \"to\": \"{{rules_sunday}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{rules_class_id_2}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{rules_class_id_2}}",
+                "sessions"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const domingo = new Date(pm.collectionVariables.get(\"rules_monday\") + \"T00:00:00Z\");",
+                  "",
+                  "domingo.setUTCDate(domingo.getUTCDate() + 6);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_sunday\", domingo.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con una sola sesion de esa semana\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json()).to.have.lengthOf(1);",
+                  "});",
+                  "",
+                  "const acumuladas = pm.collectionVariables.get(\"rules_weekly_sessions\");",
+                  "const sesion     = pm.response.json()[0].class_session_id;",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_sessions\", acumuladas ? acumuladas + \",\" + sesion : String(sesion));",
+                  "pm.collectionVariables.set(\"rules_session_2\", sesion);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Clase de la semana 3",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{rules_class_code}}\",\n  \"name\": \"Crossfit reglas 3\",\n  \"discipline\": \"CROSSFIT\",\n  \"difficulty_level\": \"BEGINNER\",\n  \"trainer_id\": {{trainer_id}},\n  \"weekday\": \"WEDNESDAY\",\n  \"start_time\": \"08:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"rules_class_code\", \"RG3\" + String(Date.now()).slice(-6));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_class_id_3\", pm.response.json().group_class_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sesion de la semana 3",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{rules_monday}}\",\n  \"to\": \"{{rules_sunday}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{rules_class_id_3}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{rules_class_id_3}}",
+                "sessions"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const domingo = new Date(pm.collectionVariables.get(\"rules_monday\") + \"T00:00:00Z\");",
+                  "",
+                  "domingo.setUTCDate(domingo.getUTCDate() + 6);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_sunday\", domingo.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con una sola sesion de esa semana\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json()).to.have.lengthOf(1);",
+                  "});",
+                  "",
+                  "const acumuladas = pm.collectionVariables.get(\"rules_weekly_sessions\");",
+                  "const sesion     = pm.response.json()[0].class_session_id;",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_sessions\", acumuladas ? acumuladas + \",\" + sesion : String(sesion));",
+                  "pm.collectionVariables.set(\"rules_session_3\", sesion);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Clase de la semana 4",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{rules_class_code}}\",\n  \"name\": \"Crossfit reglas 4\",\n  \"discipline\": \"CROSSFIT\",\n  \"difficulty_level\": \"BEGINNER\",\n  \"trainer_id\": {{trainer_id}},\n  \"weekday\": \"THURSDAY\",\n  \"start_time\": \"09:00\",\n  \"duration_minutes\": 60,\n  \"max_capacity\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"rules_class_code\", \"RG4\" + String(Date.now()).slice(-6));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_class_id_4\", pm.response.json().group_class_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sesion de la semana 4",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from\": \"{{rules_monday}}\",\n  \"to\": \"{{rules_sunday}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/group-classes/{{rules_class_id_4}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "group-classes",
+                "{{rules_class_id_4}}",
+                "sessions"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const domingo = new Date(pm.collectionVariables.get(\"rules_monday\") + \"T00:00:00Z\");",
+                  "",
+                  "domingo.setUTCDate(domingo.getUTCDate() + 6);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_sunday\", domingo.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con una sola sesion de esa semana\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json()).to.have.lengthOf(1);",
+                  "});",
+                  "",
+                  "const acumuladas = pm.collectionVariables.get(\"rules_weekly_sessions\");",
+                  "const sesion     = pm.response.json()[0].class_session_id;",
+                  "",
+                  "pm.collectionVariables.set(\"rules_weekly_sessions\", acumuladas ? acumuladas + \",\" + sesion : String(sesion));",
+                  "pm.collectionVariables.set(\"rules_session_4\", sesion);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscripcion 1 de la semana",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_weekly_member_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{rules_session_1}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{rules_session_1}}",
+                "enrollments"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201: la inscripcion 1 de 3 cabe\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ENROLLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscripcion 2 de la semana",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_weekly_member_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{rules_session_2}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{rules_session_2}}",
+                "enrollments"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201: la inscripcion 2 de 3 cabe\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ENROLLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inscripcion 3 de la semana",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_weekly_member_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{rules_session_3}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{rules_session_3}}",
+                "enrollments"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201: la inscripcion 3 de 3 cabe\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ENROLLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cuarta inscripcion de la semana",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{rules_weekly_member_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{rules_session_4}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{rules_session_4}}",
+                "enrollments"
+              ],
+              "query": []
+            },
+            "description": "\"No permitir una cuarta inscripcion en la misma semana si el limite es de 3\" (Enunciado)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 WEEKLY_LIMIT_REACHED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"WEEKLY_LIMIT_REACHED\");",
+                  "});",
+                  "",
+                  "pm.test(\"Ofrece el upgrade como salida\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"UPGRADE_PLAN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "La misma cuarta sesion con plan Elite",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{trainer_member_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/class-sessions/{{rules_session_4}}/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "class-sessions",
+                "{{rules_session_4}}",
+                "enrollments"
+              ],
+              "query": []
+            },
+            "description": "La misma sesion que el Premium no pudo tomar. El socio Elite lo dejo la carpeta Trainers."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201: el plan Elite no tiene tope semanal\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"ENROLLED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta de la persona que se bloquea",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{rules_blocked_document}}\",\n    \"first_name\": \"Reglas\",\n    \"last_name\": \"Bloqueo\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1990-11-30\",\n    \"email\": \"{{rules_blocked_email}}\",\n    \"phone\": \"55551104\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"rules_blocked_document\", \"6\" + sufijo);",
+                  "pm.collectionVariables.set(\"rules_blocked_email\", \"bloqueo\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_blocked_person_id\", pm.response.json().person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cuenta que se dejara bloqueada",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person_id\": {{rules_blocked_person_id}},\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"Bloqueo123*\",\n  \"role\": \"MEMBER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": []
+            },
+            "description": "Cuenta desechable: se bloquea a proposito y ninguna peticion posterior la usa."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"rules_blocked_username\", \"bloqueo\" + String(Date.now()).slice(-8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con el doble factor encendido por defecto\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().two_factor_enabled).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Login que emite el reto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"Bloqueo123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 202 con el reto de doble factor\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "    pm.expect(pm.response.json().masked_destination).to.include(\"*\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"rules_challenge_id\", pm.response.json().challenge_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Codigo equivocado (intento 1 de 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/challenges/{{rules_challenge_id}}/verifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "challenges",
+                "{{rules_challenge_id}}",
+                "verifications"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VERIFICATION_CODE_INVALID\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VERIFICATION_CODE_INVALID\");",
+                  "});",
+                  "",
+                  "pm.test(\"Ofrece reenviar el codigo\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"RESEND_CODE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Codigo equivocado (intento 2 de 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/challenges/{{rules_challenge_id}}/verifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "challenges",
+                "{{rules_challenge_id}}",
+                "verifications"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VERIFICATION_CODE_INVALID\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VERIFICATION_CODE_INVALID\");",
+                  "});",
+                  "",
+                  "pm.test(\"Ofrece reenviar el codigo\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"RESEND_CODE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Codigo equivocado (intento 3 de 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/challenges/{{rules_challenge_id}}/verifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "challenges",
+                "{{rules_challenge_id}}",
+                "verifications"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VERIFICATION_CODE_INVALID\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VERIFICATION_CODE_INVALID\");",
+                  "});",
+                  "",
+                  "pm.test(\"Ofrece reenviar el codigo\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"RESEND_CODE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cuarto intento con el mismo codigo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/challenges/{{rules_challenge_id}}/verifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "challenges",
+                "{{rules_challenge_id}}",
+                "verifications"
+              ],
+              "query": []
+            },
+            "description": "Tres intentos por codigo. El cuarto lo invalida y obliga a pedir uno nuevo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 429 VERIFICATION_ATTEMPTS_EXCEEDED\", function () {",
+                  "    pm.response.to.have.status(429);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VERIFICATION_ATTEMPTS_EXCEEDED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contrasena incorrecta (intento 1 de 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 INVALID_CREDENTIALS\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_CREDENTIALS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contrasena incorrecta (intento 2 de 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 INVALID_CREDENTIALS\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_CREDENTIALS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contrasena incorrecta (intento 3 de 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 INVALID_CREDENTIALS\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_CREDENTIALS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contrasena incorrecta (intento 4 de 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 INVALID_CREDENTIALS\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_CREDENTIALS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contrasena incorrecta (intento 5 de 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 INVALID_CREDENTIALS\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_CREDENTIALS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sexta contrasena incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"ClaveIncorrecta1*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            },
+            "description": "Cinco contrasenas incorrectas seguidas dejan la cuenta en BLOCKED por 15 minutos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403 ACCOUNT_BLOCKED\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"ACCOUNT_BLOCKED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "La contrasena correcta sigue bloqueada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{rules_blocked_username}}\",\n  \"password\": \"Bloqueo123*\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            },
+            "description": "El bloqueo dura 15 minutos: la clave buena no lo levanta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403 ACCOUNT_BLOCKED\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"ACCOUNT_BLOCKED\");",
+                  "});",
+                  "",
+                  "pm.test(\"Le dice al socio a quien acudir\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"CONTACT_ADMIN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ruta inexistente",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/no-existe",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "no-existe"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 404 ROUTE_NOT_FOUND\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"ROUTE_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Identificadores inexistentes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members/99999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "99999999"
+              ],
+              "query": []
+            },
+            "description": "Ningun identificador desconocido debe llegar a la base y salir como 500."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 404 MEMBER_NOT_FOUND\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"MEMBER_NOT_FOUND\");",
+                  "});",
+                  "",
+                  "// Un barrido: cada recurso responde con el codigo de su propia entidad y no con un",
+                  "// 500 ni con el generico de otro modulo.",
+                  "const esperados = {",
+                  "    \"memberships/99999999\":      \"MEMBERSHIP_NOT_FOUND\",",
+                  "    \"membership-plans/99999999\": \"MEMBERSHIP_PLAN_NOT_FOUND\",",
+                  "    \"trainers/99999999\":         \"TRAINER_NOT_FOUND\",",
+                  "    \"employees/99999999\":        \"EMPLOYEE_NOT_FOUND\",",
+                  "    \"users/99999999\":            \"USER_NOT_FOUND\",",
+                  "    \"group-classes/99999999\":    \"GROUP_CLASS_NOT_FOUND\",",
+                  "    \"class-sessions/99999999\":   \"CLASS_SESSION_NOT_FOUND\"",
+                  "};",
+                  "",
+                  "Object.keys(esperados).forEach(function (ruta) {",
+                  "    pm.sendRequest({",
+                  "        url:    pm.collectionVariables.get(\"base_url\") + \"/\" + ruta,",
+                  "        method: \"GET\",",
+                  "        header: { \"Authorization\": \"Bearer \" + pm.collectionVariables.get(\"access_token\") }",
+                  "    }, function (err, res) {",
+                  "        pm.test(\"GET /\" + ruta + \" responde 404 \" + esperados[ruta], function () {",
+                  "            pm.expect(err).to.be.null;",
+                  "            pm.expect(res.code).to.eql(404);",
+                  "            pm.expect(res.json().error_code).to.eql(esperados[ruta]);",
+                  "        });",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
           "response": []
         }
       ]

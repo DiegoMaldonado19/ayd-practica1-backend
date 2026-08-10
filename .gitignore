@@ -58,5 +58,4 @@ Thumbs.db
 !.mvn/wrapper/maven-wrapper.jar
 
 # API validation runner deps (scripts/validate-api.js)
-scripts/node_modules/
-scripts/package-lock.json
+scripts/

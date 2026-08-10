@@ -89,6 +89,16 @@ public class VerificationCodeService
         var code = verificationCodeRepository.findById(verificationCodeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_CODE_NOT_FOUND));
 
+        // Attempts first: once they run out the code is left EXPIRED, and answering
+        // the next try with VERIFICATION_CODE_INVALID would tell the interface to ask
+        // for the code again instead of offering RESEND_CODE (03-API-REST §4).
+        if (code.getAttemptCount() >= MAX_CODE_ATTEMPTS)
+        {
+            code.setStatus(CodeStatus.EXPIRED);
+
+            throw new BusinessException(ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
+        }
+
         if (code.getCodeType() != expectedType || code.getStatus() != CodeStatus.ISSUED)
         {
             throw new BusinessException(ErrorCode.VERIFICATION_CODE_INVALID);
@@ -99,13 +109,6 @@ public class VerificationCodeService
             code.setStatus(CodeStatus.EXPIRED);
 
             throw new BusinessException(ErrorCode.VERIFICATION_CODE_EXPIRED);
-        }
-
-        if (code.getAttemptCount() >= MAX_CODE_ATTEMPTS)
-        {
-            code.setStatus(CodeStatus.EXPIRED);
-
-            throw new BusinessException(ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
         }
 
         if (!passwordEncoder.matches(submittedCode, code.getCodeHash()))
