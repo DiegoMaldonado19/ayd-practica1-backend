@@ -62,6 +62,21 @@ public class MemberService
         return MemberResponse.from(member);
     }
 
+    /**
+     * The memberId of the signed-in member. classes' rating endpoint is S-only and
+     * carries no member_id in its body - the enrolled member is always the caller,
+     * the same resolution TrainerService.findTrainerIdByUser does for trainers.
+     */
+    @Transactional(readOnly = true)
+    public Long findOwnMemberId(AuthenticatedUser principal)
+    {
+        var personId = userService.findById(principal.appUserId()).personId();
+
+        return memberRepository.findByPerson_PersonId(personId)
+                .map(Member::getMemberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+    }
+
     /** Resolves member names in bulk: one query for a whole page instead of N. */
     @Transactional(readOnly = true)
     public Map<Long, String> findNames(Collection<Long> memberIds)

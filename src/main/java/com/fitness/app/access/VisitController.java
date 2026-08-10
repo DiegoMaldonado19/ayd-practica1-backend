@@ -3,6 +3,7 @@ package com.fitness.app.access;
 import com.fitness.app.access.dto.CheckInRequest;
 import com.fitness.app.access.dto.FacilityVisitResponse;
 import com.fitness.app.iam.dto.AuthenticatedUser;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +32,7 @@ public class VisitController
 
     @PostMapping
     public ResponseEntity<FacilityVisitResponse> checkIn(
-            @RequestBody CheckInRequest request,
+            @Valid @RequestBody CheckInRequest request,
             @AuthenticationPrincipal AuthenticatedUser principal)
     {
         var response = visitService.checkIn(request, principal);

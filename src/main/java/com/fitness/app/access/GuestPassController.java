@@ -4,6 +4,7 @@ import com.fitness.app.access.dto.GuestPassRequest;
 import com.fitness.app.access.dto.GuestPassResponse;
 import com.fitness.app.access.model.GuestPassType;
 import com.fitness.app.iam.dto.AuthenticatedUser;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +32,7 @@ public class GuestPassController
 
     @PostMapping
     public ResponseEntity<GuestPassResponse> create(
-            @RequestBody GuestPassRequest request,
+            @Valid @RequestBody GuestPassRequest request,
             @AuthenticationPrincipal AuthenticatedUser principal)
     {
         var response = guestPassService.create(request, principal);

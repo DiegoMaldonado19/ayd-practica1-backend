@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * trimestre)".
  */
 @ConfigurationProperties(prefix = "gym")
-public record GymProperties(Freeze freeze, GuestPass guestPass)
+public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes)
 {
     /**
      * cycleDays is the window the limits are measured over - 90 days, the "trimestre"
@@ -24,6 +24,18 @@ public record GymProperties(Freeze freeze, GuestPass guestPass)
 
     /** Guest pass limits. */
     public record GuestPass(int maxFreePerPerson)
+    {
+    }
+
+    /**
+     * "Con cierta anticipación (por ejemplo, más de 2 horas antes)" and the waitlist
+     * confirmation window, both left to the team to define (02-Modulos §2.6).
+     *
+     * Named Classes and not Class: class is a Java reserved word and cannot be a
+     * record component.
+     */
+    public record Classes(int cancellationWindowHours,
+                          int waitlistConfirmationMinutes)
     {
     }
 }
