@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The member-trainer relationship: the slice of training the two remaining Directory
@@ -49,6 +51,20 @@ public class TrainerAssignmentService
     public boolean isAssignedTo(Long trainerId, Long memberId)
     {
         return trainerAssignmentRepository.existsByTrainerIdAndMemberIdAndEndDateIsNull(trainerId, memberId);
+    }
+
+    /**
+     * Caseload by trainer: used by directory to populate the current load for each trainer
+     * and to filter by has_capacity.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Long> caseloadByTrainer()
+    {
+        return trainerAssignmentRepository.caseloadByTrainer().stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],  // trainerId
+                        row -> (Long) row[1]   // count
+                ));
     }
 
     /**

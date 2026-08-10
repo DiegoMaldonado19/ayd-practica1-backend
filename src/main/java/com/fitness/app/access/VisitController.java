@@ -5,8 +5,8 @@ import com.fitness.app.access.dto.FacilityVisitResponse;
 import com.fitness.app.iam.dto.AuthenticatedUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,8 +53,8 @@ public class VisitController
     }
 
     @GetMapping
-    public ResponseEntity<Page<FacilityVisitResponse>> search(
-            @RequestParam(required = false) Long memberId,
+    public PagedModel<FacilityVisitResponse> search(
+            @RequestParam(name = "member_id", required = false) Long memberId,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) Boolean open,
@@ -62,6 +62,6 @@ public class VisitController
     {
         var responses = visitService.search(memberId, from, to, open, pageable);
 
-        return ResponseEntity.ok(responses);
+        return new PagedModel<>(responses);
     }
 }
