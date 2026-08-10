@@ -69,6 +69,16 @@ public enum ErrorCode
     PROMOTION_USES_EXCEEDED       (HttpStatus.CONFLICT,            null,                      "Se agotaron los usos de la promoción."),
     PAYMENT_ALREADY_CONFIRMED     (HttpStatus.CONFLICT,            null,                      "El pago ya fue confirmado."),
     PAYMENT_ALREADY_VOIDED        (HttpStatus.CONFLICT,            null,                      "El pago ya fue anulado."),
+    // nuevos agregados en modulo de billing
+    PROMOTION_NOT_FOUND(HttpStatus.NOT_FOUND, null, "La promoción indicada no existe."),
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, null, "El pago indicado no existe."),
+    PAYMENT_CONCEPT_NOT_SUPPORTED(HttpStatus.CONFLICT, null, "Los pagos de pase de invitado aún no están soportados por este módulo."),
+    PAYMENT_RECEIPT_NOT_AVAILABLE(HttpStatus.CONFLICT, "CONFIRM_PAYMENT", "El pago aún no ha sido confirmado, por lo que no tiene comprobante."),
+
+    GUEST_PASS_NOT_FOUND                (HttpStatus.NOT_FOUND,     null,                      "El pase de invitado indicado no existe."),
+    GUEST_PASS_NOT_CHARGEABLE           (HttpStatus.CONFLICT,      null,                      "Solo los pases de día pagados (PAID_DAY_PASS) pueden cobrarse."),
+    PAYMENT_ALREADY_REGISTERED_FOR_PASS (HttpStatus.CONFLICT,      null,                      "El pase de invitado ya tiene un pago registrado."),
+
 
     // --- Not found ------------------------------------------------------------
     // One per entity that already exists in code. Each module adds its own.

@@ -530,6 +530,102 @@
       "value": "",
       "type": "string",
       "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "billing_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio propio de la carpeta Billing. Lo guarda 'Alta de socio para pagos'."
+    },
+    {
+      "key": "billing_person_id",
+      "value": "",
+      "type": "string",
+      "description": "Persona del socio de Billing."
+    },
+    {
+      "key": "billing_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del socio de Billing, generado por corrida."
+    },
+    {
+      "key": "billing_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del socio de Billing, generado por corrida."
+    },
+    {
+      "key": "billing_membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Membresia propia de Billing, para el pago concept=MEMBERSHIP."
+    },
+    {
+      "key": "promotion_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo unico por corrida: uq_promotion_code."
+    },
+    {
+      "key": "promotion_id",
+      "value": "",
+      "type": "string",
+      "description": "Promocion creada. La usa el pago con descuento."
+    },
+    {
+      "key": "second_promotion_code",
+      "value": "",
+      "type": "string",
+      "description": "Codigo unico de la promocion que se desactiva."
+    },
+    {
+      "key": "second_promotion_id",
+      "value": "",
+      "type": "string",
+      "description": "Promocion que se desactiva, para PROMOTION_NOT_APPLICABLE."
+    },
+    {
+      "key": "payment_cash_id",
+      "value": "",
+      "type": "string",
+      "description": "Pago en efectivo. Sobre el corren confirmar/anular."
+    },
+    {
+      "key": "payment_promo_id",
+      "value": "",
+      "type": "string",
+      "description": "Pago con promocion aplicada."
+    },
+    {
+      "key": "payment_membership_id",
+      "value": "",
+      "type": "string",
+      "description": "Pago de membresia (concept=MEMBERSHIP)."
+    },
+    {
+      "key": "billing_guest_document",
+      "value": "",
+      "type": "string",
+      "description": "Documento del invitado de Billing, generado por corrida."
+    },
+    {
+      "key": "billing_guest_email",
+      "value": "",
+      "type": "string",
+      "description": "Correo del invitado de Billing, generado por corrida."
+    },
+    {
+      "key": "billing_guest_pass_id",
+      "value": "",
+      "type": "string",
+      "description": "Pase de dia pagado. Lo guarda 'Pase pagado para el cobro'."
+    },
+    {
+      "key": "guest_pass_payment_id",
+      "value": "",
+      "type": "string",
+      "description": "Pago del pase de invitado (concept=GUEST_PASS)."
     }
   ],
   "item": [
@@ -8136,6 +8232,1061 @@
         }
       ],
       "description": "Bandeja de avisos del usuario autenticado. Las notificaciones no se crean desde aquí: las emiten los módulos cuando ocurre el hecho —congelar, reprogramar, cancelar, liberar un cupo, transferir una cartera— y las dos tareas programadas de `membership` a las 00:05 y a las 07:00.\n\nPor eso esta carpeta va al final: **corre después de Classes**, que es lo que llena la bandeja del socio."
+    },
+    {
+      "name": "Billing",
+      "description": "Cobros y promociones del módulo `billing` (`03-API-REST §3.4`). El administrador autoriza promociones; administrador y recepcionista registran, confirman y anulan pagos. El socio solo lee su propio historial y comprobantes.\n\n**Fixtures propias**, como en Access y Classes: da de alta su propio socio y contrata su propia membresía, así que no depende del estado en que Memberships dejó al suyo (ese contrato termina CANCELLED al final de esa carpeta).\n\nUn pago **nunca se borra**: `POST .../voids` lo anula con motivo. El comprobante (`receipt_series`, `receipt_number`, `receipt_issued_at`) solo existe una vez confirmado.",
+      "item": [
+        {
+          "name": "Alta de socio para pagos",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [ "{{base_url}}" ],
+              "path": [ "members" ]
+            },
+            "description": "**Administrador y recepcionista.** Expediente propio de esta carpeta, igual que hace Access: así el recorrido de Billing no depende del estado en que Memberships dejó a su socio (esa carpeta cancela su contrato al final).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{billing_document}}\",\n    \"first_name\": \"Beatriz\",\n    \"last_name\": \"Gomez\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1990-08-25\",\n    \"email\": \"{{billing_email}}\",\n    \"phone\": \"55550003\",\n    \"address\": \"7a avenida 2-30, zona 3\"\n  },\n  \"emergency_contact_name\": \"Rosa Gomez\",\n  \"emergency_contact_phone\": \"55550004\",\n  \"notes\": \"Socio creado como precondicion para probar Billing.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"billing_document\", \"7\" + sufijo);",
+                  "pm.collectionVariables.set(\"billing_email\", \"billing\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"billing_member_id\", body.member_id);",
+                  "pm.collectionVariables.set(\"billing_person_id\", body.person.person_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar membresia para el pago",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [ "{{base_url}}" ],
+              "path": [ "memberships" ]
+            },
+            "description": "**Administrador y recepcionista.** Contrato propio para el pago `concept = MEMBERSHIP`. Usa `{{membership_plan_id}}`, el plan de menor tier que dejó **Membership Plans › Catalogo de planes**.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"membership_plan_id\": {{membership_plan_id}},\n  \"notes\": \"Membresia creada como precondicion para probar Billing.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"billing_membership_id\", pm.response.json().membership_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear promocion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/promotions",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions" ]
+            },
+            "description": "**Solo administrador.** «El administrador puede autorizar descuentos o promociones» (Enunciado). `authorized_by_user_id` queda registrado con la sesión actual.\n\n`code` es único (`uq_promotion_code`), así que el script previo lo genera por corrida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{promotion_code}}\",\n  \"name\": \"Descuento de prueba 10%\",\n  \"description\": \"Promocion creada desde la coleccion de Postman.\",\n  \"discount_type\": \"PERCENTAGE\",\n  \"discount_value\": 10.00,\n  \"valid_from\": \"2026-08-10\",\n  \"valid_to\": \"2027-08-10\",\n  \"max_uses\": null,\n  \"max_uses_per_member\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// uq_promotion_code haria fallar la segunda corrida de la coleccion.",
+                  "pm.collectionVariables.set(\"promotion_code\", \"PROMO\" + String(Date.now()).slice(-8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"promotion_id\", body.promotion_id);",
+                  "",
+                  "pm.test(\"Nace activa\", function () {",
+                  "    pm.expect(body.active).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear promocion con codigo repetido",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/promotions",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions" ]
+            },
+            "description": "**Solo administrador.** `uq_promotion_code` responde con un código de negocio y no con la violación de restricción cruda.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | El código de promoción ya existe. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{promotion_code}}\",\n  \"name\": \"Codigo duplicado\",\n  \"discount_type\": \"PERCENTAGE\",\n  \"discount_value\": 5.00,\n  \"valid_from\": \"2026-08-10\",\n  \"valid_to\": \"2027-08-10\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VALIDATION_ERROR\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de promociones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/promotions?page=0&size=20",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions" ],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "active", "value": "true", "disabled": true }
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Listado paginado. Filtro: `active`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Devuelve la envoltura paginada con la promocion creada\", function () {",
+                  "    pm.expect(body.content).to.be.an(\"array\");",
+                  "    pm.expect(body.page.total_elements).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle de promocion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/promotions/{{promotion_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions", "{{promotion_id}}" ]
+            },
+            "description": "**Administrador y recepcionista.**\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PROMOTION_NOT_FOUND` | 404 | La promoción no existe. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().promotion_id).to.eql(Number(pm.collectionVariables.get(\"promotion_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Actualizar promocion",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/promotions/{{promotion_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions", "{{promotion_id}}" ]
+            },
+            "description": "**Solo administrador.** Modifica vigencia, valor y topes de uso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{promotion_code}}\",\n  \"name\": \"Descuento de prueba 10% (actualizado)\",\n  \"description\": \"Promocion actualizada desde la coleccion.\",\n  \"discount_type\": \"PERCENTAGE\",\n  \"discount_value\": 15.00,\n  \"valid_from\": \"2026-08-10\",\n  \"valid_to\": \"2027-08-10\",\n  \"max_uses\": null,\n  \"max_uses_per_member\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el valor aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(Number(pm.response.json().discount_value)).to.eql(15.00);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Crear promocion para desactivar",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/promotions",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions" ]
+            },
+            "description": "**Solo administrador.** Su único destino es quedar inactiva, para demostrar `PROMOTION_NOT_APPLICABLE` en el pago que la usa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{second_promotion_code}}\",\n  \"name\": \"Promocion que sera desactivada\",\n  \"discount_type\": \"FIXED_AMOUNT\",\n  \"discount_value\": 50.00,\n  \"valid_from\": \"2026-08-10\",\n  \"valid_to\": \"2027-08-10\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"second_promotion_code\", \"OFF\" + String(Date.now()).slice(-8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"second_promotion_id\", pm.response.json().promotion_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Desactivar promocion",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/promotions/{{second_promotion_id}}/status",
+              "host": [ "{{base_url}}" ],
+              "path": [ "promotions", "{{second_promotion_id}}", "status" ]
+            },
+            "description": "**Solo administrador.** Activa o desactiva sin borrar la fila.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 desactivada\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().active).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Registrar pago en efectivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.** «Registrar pagos de membresía realizados en el mostrador (efectivo, tarjeta u otro medio)» (Enunciado). `concept = OTHER` con `amount` explícito, sin promoción.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"concept\": \"OTHER\",\n  \"payment_method\": \"CASH\",\n  \"amount\": 100.00\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la cabecera Location\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"payment_cash_id\", body.payment_id);",
+                  "",
+                  "pm.test(\"Nace REGISTERED sin comprobante\", function () {",
+                  "    pm.expect(body.status).to.eql(\"REGISTERED\");",
+                  "    pm.expect(body.receipt_number).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Registrar pago con promocion",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.** El descuento aplicado se guarda como evidencia (`discount_amount`) aunque la promoción cambie después.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"concept\": \"OTHER\",\n  \"payment_method\": \"DEBIT_CARD\",\n  \"promotion_id\": {{promotion_id}},\n  \"amount\": 200.00\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"payment_promo_id\", body.payment_id);",
+                  "",
+                  "pm.test(\"El descuento queda aplicado\", function () {",
+                  "    pm.expect(Number(body.discount_amount)).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Registrar pago con promocion inactiva",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.**\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PROMOTION_NOT_APPLICABLE` | 409 | Promoción vencida, inactiva o no válida para ese plan. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"concept\": \"OTHER\",\n  \"payment_method\": \"CASH\",\n  \"promotion_id\": {{second_promotion_id}},\n  \"amount\": 120.00\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 PROMOTION_NOT_APPLICABLE\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"PROMOTION_NOT_APPLICABLE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Registrar pago de membresia",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.** `concept = MEMBERSHIP` liquida el contrato: `amount` se ignora si se envía, porque el monto es `membership.paid_price`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"membership_id\": {{billing_membership_id}},\n  \"concept\": \"MEMBERSHIP\",\n  \"payment_method\": \"CASH\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"payment_membership_id\", body.payment_id);",
+                  "",
+                  "pm.test(\"Queda ligado al contrato\", function () {",
+                  "    pm.expect(body.concept).to.eql(\"MEMBERSHIP\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Pago de membresia sin membership_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.** `concept = MEMBERSHIP` exige `membership_id`: sin él no hay contrato que liquidar.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `VALIDATION_ERROR` | 400 | Falta `membership_id` con `concept = MEMBERSHIP`. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{billing_member_id}},\n  \"concept\": \"MEMBERSHIP\",\n  \"payment_method\": \"CASH\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 400 VALIDATION_ERROR\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de pagos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments?page=0&size=20",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "**Administrador y recepcionista.** «Consultar el historial de pagos» (Enunciado). Con rol socio se fuerza a su propio historial (ver **Pagos propios del socio**)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Devuelve la envoltura paginada\", function () {",
+                  "    pm.expect(pm.response.json().content).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Filtrar pagos por socio y estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments?member_id={{billing_member_id}}&status=REGISTERED&page=0&size=20",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ],
+              "query": [
+                { "key": "member_id", "value": "{{billing_member_id}}" },
+                { "key": "status", "value": "REGISTERED" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "**Administrador y recepcionista.** Filtros: `member_id`, `from`, `to`, `status`, `payment_method`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Solo trae pagos del socio filtrado\", function () {",
+                  "    const body = pm.response.json();",
+                  "    body.content.forEach(function (pago) {",
+                  "        pm.expect(String(pago.member_id)).to.eql(pm.collectionVariables.get(\"billing_member_id\"));",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle del pago",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_cash_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_cash_id}}" ]
+            },
+            "description": "**Administrador, recepcionista y socio.**\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PAYMENT_NOT_FOUND` | 404 | El pago no existe. |\n| `FORBIDDEN_RESOURCE` | 403 | Un socio pidió un pago ajeno. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().payment_id).to.eql(Number(pm.collectionVariables.get(\"payment_cash_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Confirmar pago",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_cash_id}}/confirmations",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_cash_id}}", "confirmations" ]
+            },
+            "description": "**Administrador y recepcionista.** «El recepcionista puede confirmar pagos, emitir comprobantes» (Enunciado). Emite el correlativo (`receipt_series`, `receipt_number`)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda CONFIRMED con comprobante emitido\", function () {",
+                  "    pm.expect(body.status).to.eql(\"CONFIRMED\");",
+                  "    pm.expect(body.receipt_number).to.not.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Confirmar de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_cash_id}}/confirmations",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_cash_id}}", "confirmations" ]
+            },
+            "description": "**Administrador y recepcionista.**\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PAYMENT_ALREADY_CONFIRMED` | 409 | Se intentó confirmar un pago ya confirmado. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 PAYMENT_ALREADY_CONFIRMED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"PAYMENT_ALREADY_CONFIRMED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Comprobante del pago confirmado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_cash_id}}/receipt",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_cash_id}}", "receipt" ]
+            },
+            "description": "**Administrador, recepcionista y socio.** «Consultar su historial de pagos y descargar comprobantes» (Enunciado). El frontend lo maqueta e imprime a PDF con `window.print()`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con los datos del comprobante\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Trae serie, numero y fecha de emision\", function () {",
+                  "    pm.expect(body.receipt_series).to.be.a(\"string\");",
+                  "    pm.expect(body.receipt_number).to.not.eql(null);",
+                  "    pm.expect(body.receipt_issued_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Anular pago",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_promo_id}}/voids",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_promo_id}}", "voids" ]
+            },
+            "description": "**Solo administrador.** Anula un pago con motivo. El pago **no se borra**: `status = VOIDED` es el registro de que fue anulado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Cobro registrado por error en mostrador.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Queda VOIDED\", function () {",
+                  "    pm.expect(pm.response.json().status).to.eql(\"VOIDED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Anular de nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_promo_id}}/voids",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_promo_id}}", "voids" ]
+            },
+            "description": "**Solo administrador.**\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `PAYMENT_ALREADY_VOIDED` | 409 | Se intentó anular un pago ya anulado. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Segunda anulacion, debe fallar.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 PAYMENT_ALREADY_VOIDED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"PAYMENT_ALREADY_VOIDED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Pase pagado para el cobro",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/guest-passes",
+              "host": [ "{{base_url}}" ],
+              "path": [ "guest-passes" ]
+            },
+            "description": "**Administrador y recepcionista.** `PAID_DAY_PASS` no tiene tope por persona (`04-Base-de-Datos §5`), así que es el que se cobra en esta carpeta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{billing_guest_document}}\",\n    \"first_name\": \"Carlos\",\n    \"last_name\": \"Ruiz\",\n    \"email\": \"{{billing_guest_email}}\",\n    \"phone\": \"55550009\"\n  },\n  \"pass_type\": \"PAID_DAY_PASS\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"billing_guest_document\", String(Date.now()).slice(-11));",
+                  "pm.collectionVariables.set(\"billing_guest_email\", \"guestbilling\" + Date.now() + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"billing_guest_pass_id\", pm.response.json().guest_pass_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cobrar el pase de invitado",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Administrador y recepcionista.** `concept = GUEST_PASS` liquida el pase; `member_id` se omite a propósito porque quien paga es el visitante (`guest_pass.person_id`), no un socio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guest_pass_id\": {{billing_guest_pass_id}},\n  \"concept\": \"GUEST_PASS\",\n  \"payment_method\": \"CASH\",\n  \"amount\": 60.00\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"guest_pass_payment_id\", body.payment_id);",
+                  "",
+                  "pm.test(\"Es un pago de pase, sin socio asociado\", function () {",
+                  "    pm.expect(body.concept).to.eql(\"GUEST_PASS\");",
+                  "    pm.expect(body.member_id).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Confirmar y cobrar comprobante del pase",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{guest_pass_payment_id}}/confirmations",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{guest_pass_payment_id}}", "confirmations" ]
+            },
+            "description": "**Administrador y recepcionista.** Cierra el flujo de invitado con el mismo comportamiento que un pago de socio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql(\"CONFIRMED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Pagos propios del socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Solo socio.** Sin filtro, el socio ve únicamente su propio historial: «el socio solo puede filtrar por sí mismo» (`§3.4`).\n\nFirma con `classes_member_token`, dejado por la carpeta **Classes**. Se omite sola si esa variable está vacía.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{classes_member_token}}", "type": "string" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Detalle de pago ajeno como socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_membership_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments", "{{payment_membership_id}}" ]
+            },
+            "description": "**Solo socio.** El pago pertenece al socio de Billing, no al que firma el token (`classes_member_token`).\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `FORBIDDEN_RESOURCE` | 403 | El pago es de otro socio. |",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{classes_member_token}}", "type": "string" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403 FORBIDDEN_RESOURCE\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Listado de pagos sin token",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": [ "{{base_url}}" ],
+              "path": [ "payments" ]
+            },
+            "description": "**Sin autenticación.** Comprueba que la ruta está cerrada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 UNAUTHENTICATED\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"UNAUTHENTICATED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
     }
   ]
 }

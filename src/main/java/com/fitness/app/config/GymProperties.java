@@ -47,4 +47,6 @@ public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes,
     public record Membership(int expiryNoticeDays)
     {
     }
+
+    public record Billing(String receiptSeries) {}
 }
