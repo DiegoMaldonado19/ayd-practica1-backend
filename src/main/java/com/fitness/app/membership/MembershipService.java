@@ -18,6 +18,7 @@ import com.fitness.app.membership.model.MembershipFreeze;
 import com.fitness.app.membership.model.MembershipPlan;
 import com.fitness.app.membership.model.MembershipStatus;
 import com.fitness.app.membership.model.PlanBenefit;
+import com.fitness.app.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -67,6 +68,7 @@ public class MembershipService
     private final MembershipFreezeRepository membershipFreezeRepository;
     private final MembershipPlanService      membershipPlanService;
     private final MemberService              memberService;
+    private final NotificationService        notificationService;
     private final GymProperties              gymProperties;
 
     /**
@@ -339,6 +341,7 @@ public class MembershipService
         membership.setStatus(MembershipStatus.FROZEN);
 
         cancelFutureEnrollments(membership.getMemberId());
+        notificationService.membershipFrozen(membership.getMemberId(), startDate, request.expectedEndDate());
 
         return MembershipFreezeResponse.from(membershipFreezeRepository.save(freeze), today);
     }
@@ -369,28 +372,59 @@ public class MembershipService
         membership.setEndDate(membership.getEndDate().plusDays(frozenDays));
         membership.setStatus(MembershipStatus.ACTIVE);
 
+        notificationService.membershipReactivated(membership.getMemberId(), membership.getEndDate());
+
         return MembershipResponse.from(membership);
     }
 
     // -- Scheduled ----------------------------------------------------------------
 
     /**
-     * Pasa a EXPIRED las membresías vencidas.
+     * Pasa a EXPIRED las membresías vencidas y avisa: "volver a notificar el día en
+     * que la membresía pasa a estado vencida" (Enunciado).
      *
-     * ponytail: 02-Modulos §2.9 puts this task in notification, together with the
-     * expiry notices. It lives here while that module does not exist, because without
-     * it the EXPIRED state of the statement would never happen on its own.
+     * 02-Modulos §2.9 lists both scheduled tasks under notification, but its own
+     * dependency matrix (§3) lets notification consume directory and nothing else,
+     * and the canonical service of 01-Refinamiento §7 is MembershipService injecting
+     * NotificationService. They live here so the arrow keeps pointing that way: the
+     * contract state is membership's to change, the notice is notification's to send.
      */
     @Scheduled(cron = "0 5 0 * * *")
     public void expireMemberships()
     {
-        var today        = LocalDate.now();
-        var dueMemberIds = membershipRepository.findMemberIdsDueToExpire(today, MembershipStatus.ACTIVE);
-        var expired      = membershipRepository.expireDueContracts(today, MembershipStatus.ACTIVE, MembershipStatus.EXPIRED);
+        var today = LocalDate.now();
+        // Read before the bulk update: afterwards these rows no longer match it.
+        var due   = membershipRepository.findDueToExpire(today, MembershipStatus.ACTIVE).stream()
+                .collect(Collectors.toMap(Membership::getMemberId, Membership::getEndDate));
 
-        dueMemberIds.forEach(this::cancelFutureEnrollments);
+        var expired = membershipRepository.expireDueContracts(today, MembershipStatus.ACTIVE, MembershipStatus.EXPIRED);
+
+        due.forEach((memberId, endDate) ->
+        {
+            cancelFutureEnrollments(memberId);
+            notificationService.membershipExpired(memberId, endDate);
+        });
 
         log.info("Membresías vencidas: {}", expired);
+    }
+
+    /**
+     * "El sistema debe notificar al socio con un margen de días antes del vencimiento
+     * (por ejemplo, 5 días antes)" (Enunciado). The margin is
+     * gym.membership.expiry-notice-days.
+     */
+    @Scheduled(cron = "0 0 7 * * *")
+    public void notifyExpiringMemberships()
+    {
+        var noticeDays = gymProperties.membership().expiryNoticeDays();
+        var noticeDate = LocalDate.now().plusDays(noticeDays);
+
+        var expiring = membershipRepository.findExpiringOn(noticeDate, MembershipStatus.ACTIVE);
+
+        expiring.forEach(membership -> notificationService.membershipExpiring(
+                membership.getMemberId(), membership.getEndDate(), noticeDays));
+
+        log.info("Avisos de vencimiento próximo: {}", expiring.size());
     }
 
     // -- Helpers ------------------------------------------------------------------

@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * trimestre)".
  */
 @ConfigurationProperties(prefix = "gym")
-public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes)
+public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes, Membership membership)
 {
     /**
      * cycleDays is the window the limits are measured over - 90 days, the "trimestre"
@@ -36,6 +36,15 @@ public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes)
      */
     public record Classes(int cancellationWindowHours,
                           int waitlistConfirmationMinutes)
+    {
+    }
+
+    /**
+     * "Notificar al socio con un margen de días antes del vencimiento (por ejemplo, 5
+     * días antes)" (Enunciado): the margin is the team's to define, so it is
+     * configuration and not a constant.
+     */
+    public record Membership(int expiryNoticeDays)
     {
     }
 }

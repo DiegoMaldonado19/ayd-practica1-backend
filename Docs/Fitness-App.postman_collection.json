@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6f1c0b2e-9a44-4d51-9d7f-2b1c8e5a7f10",
     "name": "Fitness App",
-    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 15 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n| **Classes** | `classes` | 23 | `03-API-REST §3.6` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nTres endpoints de `03-API-REST §3.2` leen tablas de módulos que aún no existen, así que no están en la\ncolección. Llegan con su módulo:\n\n| Endpoint | Necesita |\n|---|---|\n| `GET /members/{id}/memberships` | `membership` |\n| `GET /members/{id}/trainer` | `training` |\n| `POST /trainers/{id}/member-transfers` | `training` |\n\nPor la misma razón faltan tres filtros y un dato derivado: `plan_code` y `membership_status` en\n`GET /members`, `has_capacity` en `GET /trainers`, y la carga actual en `GET /trainers/{id}`. Todos se\ncalculan sobre `membership` o `trainer_assignment`, y `directory` no consulta las tablas de otro módulo.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
+    "description": "# Sistema de Gestión de Gimnasio\n\nColección única del backend. Una carpeta por módulo implementado; cada módulo nuevo agrega la suya.\n\n| Carpeta | Módulo | Endpoints | Referencia |\n|---|---|---|---|\n| **Auth** · **Users** | `iam` | 12 | `03-API-REST §3.1` |\n| **Members** · **Employees** · **Trainers** | `directory` | 18 | `03-API-REST §3.2` |\n| **Membership Plans** · **Memberships** | `membership` | 14 | `03-API-REST §3.3` |\n| **Visits** · **Guest Passes** | `access` | 5 | `03-API-REST §3.5` |\n| **Classes** | `classes` | 23 | `03-API-REST §3.6` |\n| **Notifications** | `notification` | 2 | `03-API-REST §3.9` |\n\nBase: `http://localhost:8080/api/v1` · Formato: JSON en `snake_case` · Token: `Authorization: Bearer <jwt>`.\n\n---\n\n## Cómo usarla\n\n1. Levantar el backend desde `Backend/Fitness-App`:\n   ```bash\n   docker compose up -d --wait\n   ```\n2. Importar este archivo en Postman. Las variables ya vienen con sus valores.\n3. Ejecutar **Auth › Login**. El script guarda `access_token` automáticamente y el resto de\n   las peticiones lo usan sin que haya que copiar nada.\n\n**Credenciales de arranque:** `admin` / `Admin123*`, sembradas por `src/main/resources/db/data.sql`.\nSon públicas: cámbialas en el servidor con **Users › Cambiar contraseña propia**.\n\n**El orden de las carpetas importa.** Members deja el `person_id` que usa **Users › Crear cuenta**, y\nEmployees deja el `trainer_id` sobre el que trabaja Trainers, y Memberships contrata sobre el\n`member_id` que dejó Members. Ejecutar la colección completa, de arriba\nabajo, es lo que encadena esos identificadores.\n\n---\n\n## El alta es de dos pasos\n\nNo hay un endpoint que cree expediente y credenciales de una sola vez:\n\n1. `POST /members` o `POST /employees` crea la `person` y su expediente, y devuelve el `person_id`.\n2. `POST /users` le pone credenciales a esa persona.\n\nSepararlos deja que un expediente exista sin cuenta —el invitado del pase de prueba es una persona sin\ncredenciales— y que `uq_app_user_person` se cumpla sin esfuerzo: un entrenador que además es socio tiene\ndos expedientes y **una** sola cuenta.\n\nLos códigos `MEM-0007` y `EMP-0003` los genera el servidor a partir del `person_id`; no se envían.\n\n---\n\n## Probar el doble factor\n\nLa cuenta de arranque lo trae desactivado para que el primer login devuelva el token en un solo paso.\n**Toda cuenta creada con `POST /users` nace con doble factor encendido**, que es el `DEFAULT` de la\ncolumna: su primer login responde `202` con un reto.\n\nPara demostrarlo con el administrador:\n\n1. Poner la variable `two_factor_enabled` en `true` y ejecutar **Users › Doble factor propio**.\n2. **Auth › Login** ahora responde `202` con `challenge_id` y el destino enmascarado.\n3. Obtener el código de 6 dígitos. Dónde aparece depende de si hay servidor de correo:\n\n   | `MAIL_USERNAME` y `MAIL_PASSWORD` en `.env` | Dónde llega el código |\n   |---|---|\n   | vacías | al log: `docker logs fitness_backend \\| grep -i verification` |\n   | con credenciales | por correo, y **ya no aparece en el log** |\n\n4. Copiarlo en la variable `verification_code` y ejecutar **Auth › Verificar reto (2FA)**.\n\n> **Para probar en local conviene dejar esas dos variables vacías.** La cuenta de arranque usa el correo\n> `admin@fitnessapp.local`, un dominio que no existe: con SMTP configurado el código sale hacia una dirección\n> inexistente y el mensaje rebota. Los socios dados de alta con `POST /members` llevan un correo real, y para\n> ellos el envío sí funciona.\n\nRepetir el login emite un reto nuevo: esa es también la forma de reenviar el código.\n\n---\n\n## Errores\n\nTodas las respuestas de error comparten el mismo cuerpo:\n\n```json\n{\n  \"error_code\": \"DOCUMENT_ALREADY_REGISTERED\",\n  \"message\": \"Ya existe un expediente con ese documento.\",\n  \"suggested_action\": null,\n  \"timestamp\": \"2026-08-08T14:32:11.482Z\",\n  \"path\": \"/api/v1/members\"\n}\n```\n\n`suggested_action` le dice a la interfaz qué botón ofrecer. El catálogo completo de códigos está en\n`Docs/03-API-REST.md §4`.\n\n**Bloqueo de cuenta:** cinco contraseñas incorrectas seguidas dejan la cuenta en `BLOCKED` por 15 minutos.\nPor eso la petición de credenciales inválidas de esta colección usa un usuario inexistente y no al `admin`.\n\n---\n\n## Lo que todavía no está\n\nLos endpoints de `03-API-REST §3.2` ya están completos. Siguen faltando tres filtros y un dato\nderivado: `plan_code` y `membership_status` en `GET /members`, `has_capacity` en `GET /trainers`, y la\ncarga actual en `GET /trainers/{id}`. Todos se calculan sobre `membership` o `trainer_assignment`, y\n`directory` no consulta las tablas de otro módulo.\n\nDe `notification` se cablean ocho de los diez tipos. `TRAINER_ALERT` y `PAYMENT_CONFIRMED` pertenecen a\n`training` y `billing`, que no existen: el enum los declara para espejar `ck_notification_type`, pero\nnadie los emite todavía.\n\nLas dos tareas programadas —`MEMBERSHIP_EXPIRING` a las 07:00 y `MEMBERSHIP_EXPIRED` a las 00:05— no\ntienen endpoint que las dispare, así que **no se pueden probar desde la colección**. Para verlas hay\nque contratar una membresía que venza dentro de `gym.membership.expiry-notice-days` y esperar al\ncron, o adelantar su expresión en `application.yml`.\n\n---\n\n## Ejecución automatizada\n\nCada petición trae aserciones, así que la colección corre completa sin Postman:\n\n```bash\nnewman run Fitness-App.postman_collection.json\n```\n\nLos documentos, correos y nombres de usuario se generan con la marca de tiempo, así que la colección se\npuede correr **varias veces sobre la misma base** sin chocar contra las restricciones de unicidad.\n\nLas peticiones que dependen de un dato manual (código de verificación, código de recuperación) se omiten\nsolas cuando la variable está vacía.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -452,6 +452,84 @@
       "value": "",
       "type": "string",
       "description": "Entrada del socio Elite en la lista de espera."
+    },
+    {
+      "key": "second_employee_id",
+      "value": "",
+      "type": "string",
+      "description": "La llena Alta del segundo entrenador."
+    },
+    {
+      "key": "second_trainer_id",
+      "value": "",
+      "type": "string",
+      "description": "La llena Alta del segundo entrenador. Destino de la transferencia de cartera."
+    },
+    {
+      "key": "second_employee_document",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "second_employee_email",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "type": "string",
+      "description": "La llena Bandeja del socio. Vacia = las peticiones que la usan se omiten."
+    },
+    {
+      "key": "trainer_elite_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan ELITE, el unico que incluye entrenador personal."
+    },
+    {
+      "key": "trainer_basic_plan_id",
+      "value": "",
+      "type": "string",
+      "description": "Plan BASIC, el que no lo incluye. Sirve al caso negativo."
+    },
+    {
+      "key": "trainer_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio Elite de esta carpeta. Lo llena Alta del socio con Plan Elite."
+    },
+    {
+      "key": "trainer_member_document",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "trainer_member_email",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "trainer_basic_member_id",
+      "value": "",
+      "type": "string",
+      "description": "Socio Basico de esta carpeta. Lo llena Alta del socio con Plan Basico."
+    },
+    {
+      "key": "trainer_basic_document",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
+    },
+    {
+      "key": "trainer_basic_email",
+      "value": "",
+      "type": "string",
+      "description": "Se genera con la marca de tiempo."
     }
   ],
   "item": [
@@ -1717,6 +1795,67 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "Alta del segundo entrenador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "employees"
+              ]
+            },
+            "description": "**Solo administrador.** El entrenador que recibe la cartera en **Trainers › Transferir la cartera**. La transferencia necesita dos perfiles vivos, y el alta es el único sitio donde nacen.\n\nSu `max_member_load` es holgado a propósito: `TRAINER_CAPACITY_EXCEEDED` se comprueba contra la cartera completa antes de mover a nadie, y con un tope corto la transferencia entera fallaría.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{second_employee_document}}\",\n    \"first_name\": \"Luis\",\n    \"last_name\": \"Gómez\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1988-06-05\",\n    \"email\": \"{{second_employee_email}}\",\n    \"phone\": \"55550009\",\n    \"address\": \"12 calle 3-45, zona 10\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-02-01\",\n  \"max_member_load\": 30,\n  \"bio\": \"Rehabilitacion y entrenamiento funcional.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"second_employee_document\", \"4\" + sufijo);",
+                  "pm.collectionVariables.set(\"second_employee_email\", \"staff\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.collectionVariables.set(\"second_employee_id\", body.employee_id);",
+                  "pm.collectionVariables.set(\"second_trainer_id\", body.trainer_id);",
+                  "",
+                  "pm.test(\"Abre su perfil de entrenador\", function () {",
+                  "    pm.expect(body.trainer_id).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
         }
       ]
     },
@@ -1997,6 +2136,592 @@
                   "",
                   "pm.test(\"Encuentra al entrenador de CARDIO\", function () {",
                   "    pm.expect(pm.response.json().page.total_elements).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Planes para la asignacion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/membership-plans?page=0&size=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "membership-plans"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** Resuelve los planes sembrados por `data.sql` por su codigo. La asignacion de entrenador depende del beneficio: solo `ELITE` incluye `PERSONAL_TRAINER`, y `BASIC` es el contraste que prueba la restriccion."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const planes = pm.response.json().content;",
+                  "const porCodigo = (codigo) => planes.find((p) => p.code === codigo);",
+                  "",
+                  "pm.collectionVariables.set(\"trainer_elite_plan_id\", porCodigo(\"ELITE\").membership_plan_id);",
+                  "pm.collectionVariables.set(\"trainer_basic_plan_id\", porCodigo(\"BASIC\").membership_plan_id);",
+                  "",
+                  "pm.test(\"Solo Elite incluye entrenador personal\", function () {",
+                  "    pm.expect(porCodigo(\"ELITE\").includes_personal_trainer).to.eql(true);",
+                  "    pm.expect(porCodigo(\"BASIC\").includes_personal_trainer).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio con Plan Elite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcion.** La carpeta necesita su propio socio: la asignacion valida el plan, y **Trainers corre antes que Memberships**, asi que el socio de `Members` todavia no tiene contrato cuando se llega aqui.\n\nEs el mismo patron de `Classes`, que tambien da de alta a los suyos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{trainer_member_document}}\",\n    \"first_name\": \"Elena\",\n    \"last_name\": \"Ruiz\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1993-09-21\",\n    \"email\": \"{{trainer_member_email}}\",\n    \"phone\": \"55550011\",\n    \"address\": \"7a avenida 8-90, zona 9\"\n  },\n  \"emergency_contact_name\": \"Marta Ruiz\",\n  \"emergency_contact_phone\": \"55550012\",\n  \"notes\": \"Socio Elite para la asignacion de entrenador.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"trainer_member_document\", \"5\" + sufijo);",
+                  "pm.collectionVariables.set(\"trainer_member_email\", \"elite\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"trainer_member_id\", pm.response.json().member_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Elite al socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcion.** «Cuando un socio con Plan Elite es dado de alta o realiza el upgrade a este plan, el administrador es quien realiza la asignacion del entrenador» (Enunciado). Sin este contrato la asignacion responde `409 MEMBERSHIP_NOT_ACTIVE`: primero hay membresia vigente, despues beneficio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{trainer_member_id}},\n  \"membership_plan_id\": {{trainer_elite_plan_id}},\n  \"notes\": \"Elite: el unico plan con entrenador personal.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Alta del socio con Plan Basico",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members"
+              ]
+            },
+            "description": "**Administrador y recepcion.** El contraste: un socio cuyo plan **no** incluye entrenador personal, para que la restriccion del Enunciado se vea fallar de verdad y no solo se describa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"{{trainer_basic_document}}\",\n    \"first_name\": \"Bruno\",\n    \"last_name\": \"Diaz\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1993-09-21\",\n    \"email\": \"{{trainer_basic_email}}\",\n    \"phone\": \"55550011\",\n    \"address\": \"7a avenida 8-90, zona 9\"\n  },\n  \"emergency_contact_name\": \"Marta Ruiz\",\n  \"emergency_contact_phone\": \"55550012\",\n  \"notes\": \"Socio Basico para el caso negativo del beneficio.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const sufijo = String(Date.now()).slice(-11);",
+                  "",
+                  "pm.collectionVariables.set(\"trainer_basic_document\", \"6\" + sufijo);",
+                  "pm.collectionVariables.set(\"trainer_basic_email\", \"basico\" + sufijo + \"@fitnessapp.local\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"trainer_basic_member_id\", pm.response.json().member_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Contratar Basico al socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/memberships",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "memberships"
+              ]
+            },
+            "description": "**Administrador y recepcion.** Deja al socio con una membresia vigente pero sin el beneficio.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"member_id\": {{trainer_basic_member_id}},\n  \"membership_plan_id\": {{trainer_basic_plan_id}},\n  \"notes\": \"Basico: sin entrenador personal.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Asignar entrenador al socio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members/{{trainer_member_id}}/trainer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{trainer_member_id}}",
+                "trainer"
+              ]
+            },
+            "description": "**Solo administrador.** Abre la relación socio-entrenador: la fila de `trainer_assignment` con `end_date` nula es la asignación vigente, y las cerradas son el historial.\n\nEs la puerta de entrada de las otras dos rutas de esta carpeta: sin una fila abierta no hay entrenador que consultar ni cartera que transferir. También es lo que hace exigible «el entrenador solo ve a los suyos» de `§3.2`, y emite `TRAINER_ASSIGNED` a la bandeja del socio.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_ALREADY_ASSIGNED` | 409 | El socio ya tiene un entrenador vigente. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | El entrenador llegó a su tope de cartera. |\n| `TRANSFER_TARGET_INVALID` | 409 | El entrenador está dado de baja. |\n| `MEMBER_NOT_FOUND` | 404 | El socio no existe. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 201 con la asignacion abierta\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Nace vigente: sin fecha ni motivo de cierre\", function () {",
+                  "    pm.expect(body.end_date).to.be.null;",
+                  "    pm.expect(body.end_reason).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Asignar un segundo entrenador",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members/{{trainer_member_id}}/trainer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{trainer_member_id}}",
+                "trainer"
+              ]
+            },
+            "description": "**Solo administrador.** El mismo socio, otra vez. `uq_assign_current` es un índice único parcial sobre `member_id WHERE end_date IS NULL`: un socio tiene **un** entrenador vigente, y cambiarlo es cerrar el anterior, no abrir otro en paralelo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 TRAINER_ALREADY_ASSIGNED\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_ALREADY_ASSIGNED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Asignar entrenador sin el beneficio del plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/members/{{trainer_basic_member_id}}/trainer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{trainer_basic_member_id}}",
+                "trainer"
+              ]
+            },
+            "description": "**Solo administrador.** «El sistema debe validar, en cada intento de inscripcion a una clase **o de solicitud de entrenador**, si el plan actual del socio incluye ese beneficio; si no lo incluye, debe informarle claramente la restriccion y, opcionalmente, ofrecerle la opcion de mejorar su plan» (Enunciado).\n\n`suggested_action` viaja en `UPGRADE_PLAN`: es el boton que la interfaz debe ofrecer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trainer_id\": {{trainer_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403 PLAN_BENEFIT_NOT_INCLUDED\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"PLAN_BENEFIT_NOT_INCLUDED\");",
+                  "});",
+                  "",
+                  "pm.test(\"Ofrece el upgrade del plan\", function () {",
+                  "    pm.expect(pm.response.json().suggested_action).to.eql(\"UPGRADE_PLAN\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Entrenador asignado al socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members/{{trainer_member_id}}/trainer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{trainer_member_id}}",
+                "trainer"
+              ]
+            },
+            "description": "**Todos los roles.** «Entrenador asignado al socio» (`§3.2`). La ruta cuelga de `/members`, pero la respuesta se compone entre dos módulos: `training` dice qué tramo está abierto y `directory` dice quién es ese entrenador.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRAINER_ASSIGNMENT_NOT_FOUND` | 404 | El socio no tiene entrenador asignado. |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el entrenador vigente\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().trainer_id).to.eql(Number(pm.collectionVariables.get(\"trainer_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Transferir la cartera",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/trainers/{{trainer_id}}/member-transfers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "trainers",
+                "{{trainer_id}}",
+                "member-transfers"
+              ]
+            },
+            "description": "**Solo administrador.** «La baja de un entrenador transfiere su cartera» (`§3.2`). El entrenador que se vacía va en la ruta; en el cuerpo viaja solo el destino.\n\nCada asignación vigente se cierra con `end_reason = TRAINER_LEFT` y se abre una nueva sobre el destino: **el historial no se reescribe**, se apila. Cada socio movido recibe `TRAINER_ASSIGNED` en su bandeja.\n\nEl tope del destino se comprueba contra la cartera **completa** antes de mover a nadie: media transferencia dejaría a los socios repartidos entre dos entrenadores.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `TRANSFER_TARGET_INVALID` | 409 | El destino es el mismo entrenador o está dado de baja. |\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | La cartera no cabe en el tope del destino. |\n| `TRAINER_NOT_FOUND` | 404 | Cualquiera de los dos entrenadores no existe. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con los tramos abiertos en el destino\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Devuelve la cartera movida\", function () {",
+                  "    pm.expect(body).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(body.every(a => a.trainer_id === Number(pm.collectionVariables.get(\"second_trainer_id\")))).to.be.true;",
+                  "    pm.expect(body.every(a => a.end_date === null)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Entrenador asignado tras la transferencia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/members/{{trainer_member_id}}/trainer",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "members",
+                "{{trainer_member_id}}",
+                "trainer"
+              ]
+            },
+            "description": "**Todos los roles.** El mismo socio que la consulta anterior, ahora con el entrenador destino: es la prueba de que la transferencia cerró un tramo y abrió otro en lugar de sobrescribirlo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con el entrenador destino\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().trainer_id).to.eql(Number(pm.collectionVariables.get(\"second_trainer_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Transferir a si mismo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/trainers/{{second_trainer_id}}/member-transfers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "trainers",
+                "{{second_trainer_id}}",
+                "member-transfers"
+              ]
+            },
+            "description": "**Solo administrador.** Origen y destino iguales. No es una operación vacía: cerraría cada tramo y lo volvería a abrir sobre el mismo entrenador, ensuciando el historial sin cambiar nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 TRANSFER_TARGET_INVALID\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"TRANSFER_TARGET_INVALID\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Transferencia sin token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/trainers/{{trainer_id}}/member-transfers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "trainers",
+                "{{trainer_id}}",
+                "member-transfers"
+              ]
+            },
+            "description": "**Sin autenticación.** Comprueba que la ruta está cerrada: el filtro JWT responde `401 UNAUTHENTICATED` antes de mirar el cuerpo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to_trainer_id\": {{second_trainer_id}}\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 UNAUTHENTICATED\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"UNAUTHENTICATED\");",
                   "});"
                 ]
               }
@@ -4019,8 +4744,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.collectionVariables.set(\"guest_document\", String(Date.now()).slice(-11));",
-                  "pm.collectionVariables.set(\"guest_email\", \"guest\" + Date.now() + \"@test.com\");",
-                  "pm.collectionVariables.set(\"guest_person_id\", pm.response.json().person.person_id);"
+                  "pm.collectionVariables.set(\"guest_email\", \"guest\" + Date.now() + \"@test.com\");"
                 ]
               }
             },
@@ -6374,7 +7098,7 @@
                 "{{alt_class_session_id}}"
               ]
             },
-            "description": "**Administrador.** El mismo día, una hora más tarde y con dos lugares más. Los inscritos conservan su inscripción; notificarles queda pendiente del módulo `notification`.",
+            "description": "**Administrador.** El mismo día, una hora más tarde y con dos lugares más. Los inscritos conservan su inscripción y reciben `SESSION_RESCHEDULED` en su bandeja: aparece en **Notifications › Bandeja del socio**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"session_date\": \"{{session_to}}\",\n  \"start_time\": \"21:00\",\n  \"max_capacity\": 4,\n  \"trainer_id\": \"{{trainer_id}}\"\n}"
@@ -6828,7 +7552,7 @@
                 "cancellations"
               ]
             },
-            "description": "**Administrador.** «Cancela la sesión con motivo y notifica a los inscritos» (`§3.6`). El motivo es obligatorio porque `ck_session_cancel` es un si y solo si: `CANCELLED` y `cancellation_reason` van juntos o no van.\n\nLas inscripciones activas se cancelan en bloque en la misma operación.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La sesión ya está cerrada o cancelada. |",
+            "description": "**Administrador.** «Cancela la sesión con motivo y notifica a los inscritos» (`§3.6`). El motivo es obligatorio porque `ck_session_cancel` es un si y solo si: `CANCELLED` y `cancellation_reason` van juntos o no van.\n\nLas inscripciones activas se cancelan en bloque en la misma operación, y cada inscrito recibe `SESSION_CANCELLED` por correo. Sin SMTP la fila queda `FAILED` con su motivo y **sigue apareciendo en la bandeja**: el aviso se demuestra igual.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | La sesión ya está cerrada o cancelada. |",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"cancellation_reason\": \"Mantenimiento del salon de yoga.\"\n}"
@@ -6972,6 +7696,446 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Bandeja del socio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications?page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Base 0."
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "Por defecto 20, máximo 100."
+                },
+                {
+                  "key": "sort",
+                  "value": "createdAt,desc",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**Todos los roles.** «Bandeja del usuario autenticado» (`§3.9`). **No hay identificador de usuario en la ruta**: la bandeja es siempre la de quien firma, así que el alcance es el token y no un parámetro que se pueda cambiar.\n\nFirma con `classes_member_token`, el socio que pasó por **Classes**: sus avisos los dejaron la reprogramación y la cancelación de sesiones de esa carpeta.\n\n**Toda notificación es una fila**, sea cual sea el canal. `channel` solo dice cómo se intentó entregar: `IN_APP` nace `SENT`, y `EMAIL` queda `FAILED` con su `failure_reason` si no hay SMTP configurado. Por eso el flujo se demuestra completo sin servidor de correo.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. La bandeja es la del socio.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 con la envoltura paginada\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().content).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "const contenido = pm.response.json().content;",
+                  "",
+                  "if (contenido.length) {",
+                  "    pm.collectionVariables.set(\"notification_id\", contenido[0].notification_id);",
+                  "",
+                  "    pm.test(\"Cada aviso trae su tipo, su canal y su estado\", function () {",
+                  "        pm.expect(contenido[0].notification_type).to.be.a(\"string\");",
+                  "        pm.expect(contenido[0].channel).to.be.a(\"string\");",
+                  "        pm.expect(contenido[0].status).to.be.a(\"string\");",
+                  "    });",
+                  "} else {",
+                  "    console.log(\"Bandeja vacia: las peticiones que dependen de notification_id se omiten.\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Filtrar la bandeja por estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications?status=SENT&page=0&size=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SENT",
+                  "description": "PENDING | SENT | FAILED | READ"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "**Todos los roles.** El filtro `status` de `§3.9`, sobre la misma bandeja.\n\n`SENT` son los avisos entregados y todavía sin leer. `FAILED` es el otro filtro útil sin SMTP: ahí aparecen los correos formales —vencimiento y cupo liberado— con el motivo por el que no salieron.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. La bandeja es la del socio.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"El filtro se respeta fila por fila\", function () {",
+                  "    pm.expect(pm.response.json().content.every(n => n.status === \"SENT\")).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Marcar como leida",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notification_id}}",
+                "status"
+              ]
+            },
+            "description": "**Todos los roles.** «Marca una notificación como leída» (`§3.9`). Sella `read_at`, que es lo que separa un aviso leído de uno entregado.\n\nLeer dos veces no es un error, pero la primera marca de tiempo es la que cuenta: no se reescribe.\n\n| Error | HTTP | Cuándo |\n|---|---|---|\n| `INVALID_STATE_TRANSITION` | 409 | El destino no es `READ`. |\n| `FORBIDDEN_RESOURCE` | 403 | La notificación es de otro usuario. |\n| `NOTIFICATION_NOT_FOUND` | 404 | La notificación no existe. |",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READ\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"notification_id\")) {",
+                  "    console.log(\"Omitida: la bandeja del socio llego vacia.\");",
+                  "    pm.execution.skipRequest();",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. La bandeja es la del socio.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test(\"Queda READ con su read_at sellado\", function () {",
+                  "    pm.expect(body.status).to.eql(\"READ\");",
+                  "    pm.expect(body.read_at).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Marcar con un estado que no acepta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notification_id}}",
+                "status"
+              ]
+            },
+            "description": "**Todos los roles.** `READ` es el único destino que la API acepta. `PENDING`, `SENT` y `FAILED` son estados de entrega: los escribe el servidor cuando intenta el envío, y dejarlos abiertos permitiría al cliente decir que un correo se envió.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SENT\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{classes_member_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"notification_id\")) {",
+                  "    console.log(\"Omitida: la bandeja del socio llego vacia.\");",
+                  "    pm.execution.skipRequest();",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"classes_member_token\")) {",
+                  "    console.log(\"Omitida: no hay classes_member_token. La bandeja es la del socio.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 409 INVALID_STATE_TRANSITION\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"INVALID_STATE_TRANSITION\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Marcar la notificacion de otro usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notification_id}}",
+                "status"
+              ]
+            },
+            "description": "**Administrador.** La misma notificación del socio, firmada con el token del administrador. El listado no necesita comprobar propiedad —siempre devuelve la bandeja de quien firma— pero el `PATCH` sí, porque el identificador llega en la ruta.\n\nNingún rol es excepción: una bandeja no se lee ni se marca desde otra cuenta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READ\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"notification_id\")) {",
+                  "    console.log(\"Omitida: la bandeja del socio llego vacia.\");",
+                  "    pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 403 FORBIDDEN_RESOURCE\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Notificacion inexistente",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/99999999/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "99999999",
+                "status"
+              ]
+            },
+            "description": "**Todos los roles.** Un identificador que no existe responde `404` antes de mirar de quién es: el orden importa poco aquí porque ninguna de las dos respuestas revela nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READ\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 404 NOTIFICATION_NOT_FOUND\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"NOTIFICATION_NOT_FOUND\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Bandeja sin token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            },
+            "description": "**Sin autenticación.** La bandeja se define por el token, así que sin token no hay bandeja que devolver: `401 UNAUTHENTICATED`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 401 UNAUTHENTICATED\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().error_code).to.eql(\"UNAUTHENTICATED\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Bandeja de avisos del usuario autenticado. Las notificaciones no se crean desde aquí: las emiten los módulos cuando ocurre el hecho —congelar, reprogramar, cancelar, liberar un cupo, transferir una cartera— y las dos tareas programadas de `membership` a las 00:05 y a las 07:00.\n\nPor eso esta carpeta va al final: **corre después de Classes**, que es lo que llena la bandeja del socio."
     }
   ]
 }

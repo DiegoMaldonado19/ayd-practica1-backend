@@ -90,14 +90,31 @@ public interface MembershipRepository extends JpaRepository<Membership, Long>
            """)
     int expireDueContracts(LocalDate today, MembershipStatus active, MembershipStatus expired);
 
-    /** The members about to expire, read before expireDueContracts so classes can cancel their future enrollments. */
+    /**
+     * The contracts about to expire, read before expireDueContracts so classes can
+     * cancel their future enrollments and notification can date the notice.
+     */
     @Query("""
-           SELECT m.memberId
+           SELECT m
              FROM Membership m
             WHERE m.status = :active
               AND m.endDate < :today
            """)
-    List<Long> findMemberIdsDueToExpire(LocalDate today, MembershipStatus active);
+    List<Membership> findDueToExpire(LocalDate today, MembershipStatus active);
+
+    /**
+     * "Notificar al socio con un margen de días antes del vencimiento" (Enunciado):
+     * the contracts still in force that expire exactly on the notice date. An exact
+     * date and not a window, because the sweep runs daily: a window would mail the
+     * same member once per day for the whole margin.
+     */
+    @Query("""
+           SELECT m
+             FROM Membership m
+            WHERE m.status = :active
+              AND m.endDate = :noticeDate
+           """)
+    List<Membership> findExpiringOn(LocalDate noticeDate, MembershipStatus active);
 
     /**
      * The contract in force of each member, plan tier included, in one query. Used to

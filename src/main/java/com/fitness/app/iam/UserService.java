@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Optional;
 
 /** Account maintenance: the administrator's listing, and every user's own settings. */
 @Service
@@ -46,6 +47,18 @@ public class UserService
     public UserResponse findById(Long appUserId)
     {
         return toResponse(findOrFail(appUserId));
+    }
+
+    /**
+     * The account of a person, for notification to address the notice. Optional and
+     * not an exception: a file may exist without credentials -the guest of a trial
+     * pass is a person with no account- and a missing recipient must skip the notice,
+     * never abort the caller.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UserResponse> findByPersonId(Long personId)
+    {
+        return userRepository.findByPersonId(personId).map(this::toResponse);
     }
 
     /**

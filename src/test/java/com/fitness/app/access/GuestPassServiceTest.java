@@ -5,6 +5,7 @@ import com.fitness.app.access.model.GuestPass;
 import com.fitness.app.access.model.GuestPassType;
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
+import com.fitness.app.config.GymProperties;
 import com.fitness.app.directory.PersonService;
 import com.fitness.app.directory.dto.PersonContactDTO;
 import com.fitness.app.directory.dto.PersonRequestDTO;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -37,6 +39,13 @@ class GuestPassServiceTest
 
     @Mock private GuestPassRepository guestPassRepository;
     @Mock private PersonService       personService;
+
+    // The real value of application.yml: one free trial per person.
+    @Spy private GymProperties gymProperties = new GymProperties(
+            new GymProperties.Freeze(15, 2, 90),
+            new GymProperties.GuestPass(1),
+            new GymProperties.Classes(2, 60),
+            new GymProperties.Membership(5));
 
     @InjectMocks private GuestPassService guestPassService;
 
