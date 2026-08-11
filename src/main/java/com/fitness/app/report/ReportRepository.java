@@ -16,8 +16,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
-import java.sql.ResultSet;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;

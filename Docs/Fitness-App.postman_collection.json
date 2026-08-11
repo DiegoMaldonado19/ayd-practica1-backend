@@ -8465,7 +8465,7 @@
                 }
               ]
             },
-            "description": "Misma consulta en CSV. Es la unica peticion que comprueba la cabecera y las filas que escribe ReportCsv; el CSV de ingresos va vacio mientras no exista el modulo de cobros."
+            "description": "Misma consulta en CSV. Comprueba la cabecera y las filas que escribe ReportCsv sobre columnas simples; el CSV de ingresos va vacio mientras no exista el modulo de cobros."
           },
           "response": [],
           "event": [
@@ -8555,6 +8555,75 @@
                   "",
                   "        pm.expect(fila.attendance_rate).to.eql(esperada);",
                   "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Class Attendance (CSV)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reports/class-attendance?from=2026-01-01&to=2026-12-31&format=csv",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports",
+                "class-attendance"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01",
+                  "disabled": false
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31",
+                  "disabled": false
+                },
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "El unico reporte en CSV que lleva fecha y hora. Va aparte de la distribucion porque un ObjectMapper sin java.time responde 500 justo aqui y en ningun otro CSV."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Responde 200 como descarga CSV\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/csv\");",
+                  "    pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"class-attendance.csv\");",
+                  "});",
+                  "",
+                  "pm.test(\"La fecha y la hora salen en ISO, igual que en el JSON\", function () {",
+                  "    const lineas = pm.response.text().trim().split(\"\\n\");",
+                  "",
+                  "    pm.expect(lineas[0].trim()).to.eql(\"session_id,class_name,trainer_name,session_date,session_time,attended_count,absent_count,cancelled_count,attendance_rate\");",
+                  "    pm.expect(lineas.length).to.be.above(1);",
+                  "    pm.expect(lineas[1]).to.match(/,\\d{4}-\\d{2}-\\d{2},\\d{2}:\\d{2}:\\d{2},/);",
                   "});"
                 ]
               }

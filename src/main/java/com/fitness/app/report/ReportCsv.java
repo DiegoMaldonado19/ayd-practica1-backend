@@ -1,7 +1,9 @@
 package com.fitness.app.report;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -13,9 +15,14 @@ import java.util.Map;
  * Headers are derived from JSON property names via ObjectMapper.
  */
 @Component
+@RequiredArgsConstructor
 public class ReportCsv
 {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> ROW_TYPE = new TypeReference<>() {};
+
+    // The application mapper, not a bare one: it already knows java.time, so a CSV
+    // cell reads exactly like the same field in the JSON response.
+    private final ObjectMapper objectMapper;
 
     public String toCsv(List<?> rows)
     {
@@ -27,7 +34,7 @@ public class ReportCsv
         var stringWriter = new StringWriter();
         var writer = new PrintWriter(stringWriter);
 
-        var firstRow = objectMapper.convertValue(rows.get(0), Map.class);
+        var firstRow = objectMapper.convertValue(rows.get(0), ROW_TYPE);
         var headers = firstRow.keySet();
 
         // Write headers
@@ -39,9 +46,9 @@ public class ReportCsv
         // Write data rows
         for (var row : rows)
         {
-            var map = objectMapper.convertValue(row, Map.class);
+            var map = objectMapper.convertValue(row, ROW_TYPE);
             var values = headers.stream()
-                    .map(header -> map.get(header))
+                    .map(map::get)
                     .map(this::escapeCsvValue)
                     .toList();
             var dataLine = String.join(",", values);
