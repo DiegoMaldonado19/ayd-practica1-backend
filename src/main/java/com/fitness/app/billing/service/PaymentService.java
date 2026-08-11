@@ -48,6 +48,14 @@ public class PaymentService {
     @Value("${gym.billing.receipt-series:A}")
     private String receiptSeries;
 
+    /**
+     * Lista pagos según filtros y alcance del usuario.
+     *
+     * @param filter    criterios de búsqueda
+     * @param principal usuario autenticado
+     * @param pageable  paginación
+     * @return página de PaymentResponse
+     */
     @Transactional(readOnly = true)
     public Page<PaymentResponse> list(PaymentFilter filter, AuthenticatedUser principal, Pageable pageable) {
         Long effectiveMemberId = resolveMemberIdFilter(filter.memberId(), principal);
@@ -55,6 +63,13 @@ public class PaymentService {
         return paymentRepository.findAll(spec, pageable).map(PaymentResponse::from);
     }
 
+    /**
+     * Recupera un pago por id y valida si el usuario puede verlo.
+     *
+     * @param paymentId id del pago
+     * @param principal usuario autenticado
+     * @return PaymentResponse del pago
+     */
     @Transactional(readOnly = true)
     public PaymentResponse findById(Long paymentId, AuthenticatedUser principal) {
         Payment payment = findEntity(paymentId);
@@ -62,6 +77,13 @@ public class PaymentService {
         return PaymentResponse.from(payment);
     }
 
+    /**
+     * Obtiene el recibo de un pago confirmado, si ya existe.
+     *
+     * @param paymentId id del pago
+     * @param principal usuario autenticado
+     * @return ReceiptResponse con el recibo
+     */
     @Transactional(readOnly = true)
     public ReceiptResponse getReceipt(Long paymentId, AuthenticatedUser principal) {
         Payment payment = findEntity(paymentId);
@@ -72,6 +94,13 @@ public class PaymentService {
         return ReceiptResponse.from(payment);
     }
 
+    /**
+     * Registra un nuevo pago, aplicando concepto, promoción y validaciones.
+     *
+     * @param request   datos del pago
+     * @param principal usuario autenticado que registra el pago
+     * @return PaymentResponse creado
+     */
     @Transactional
     public PaymentResponse register(PaymentRequest request, AuthenticatedUser principal) {
 
@@ -166,6 +195,12 @@ public class PaymentService {
         payment.setGrossAmount(request.amount());
     }
 
+    /**
+     * Confirma un pago pendiente y asigna el siguiente número de recibo.
+     *
+     * @param paymentId id del pago
+     * @return PaymentResponse confirmado
+     */
     @Transactional
     public PaymentResponse confirm(Long paymentId) {
         Payment payment = findEntity(paymentId);
@@ -186,6 +221,13 @@ public class PaymentService {
         return PaymentResponse.from(payment);
     }
 
+    /**
+     * Anula un pago y registra la razón de la anulación.
+     *
+     * @param paymentId id del pago
+     * @param request   datos de la anulación
+     * @return PaymentResponse actualizado
+     */
     @Transactional
     public PaymentResponse voidPayment(Long paymentId, PaymentVoidRequest request) {
         Payment payment = findEntity(paymentId);

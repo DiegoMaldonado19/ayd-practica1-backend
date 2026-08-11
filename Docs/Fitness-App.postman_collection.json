@@ -9326,7 +9326,7 @@
 
 
     {
-  "name": "Training",
+  "name": "Training setup",
   "description": "Prepara un socio con Plan Élite y un entrenador con la asignación vigente, que es la precondición de todo `training`. Ejecutar de arriba a abajo una sola vez por base de datos limpia.",
   "item": [
     {
@@ -9706,7 +9706,700 @@
       "response": []
     }
   ]
+},
+
+
+
+{
+  "name": "Trainer Assignments",
+  "item": [
+    {
+      "name": "Listar asignaciones (admin)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/trainer-assignments?active=true",
+          "host": ["{{base_url}}"],
+          "path": ["trainer-assignments"],
+          "query": [{ "key": "active", "value": "true" }]
+        },
+        "description": "**Rol: A T.** Sin `trainer_id`, el admin ve toda la cartera activa del gimnasio."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar cartera propia (entrenador)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/trainer-assignments?trainer_id={{trainer_id}}&active=true",
+          "host": ["{{base_url}}"],
+          "path": ["trainer-assignments"],
+          "query": [
+            { "key": "trainer_id", "value": "{{trainer_id}}" },
+            { "key": "active", "value": "true" }
+          ]
+        },
+        "description": "**Rol: T.** El entrenador solo puede filtrar por sí mismo."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Reasignar a otro entrenador",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"trainer_id\": {{trainer_id}}\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-assignments", "host": ["{{base_url}}"], "path": ["trainer-assignments"] },
+        "description": "**Rol: A.** Si el socio ya tenía entrenador, cierra esa fila con `end_reason: REASSIGNMENT` y abre esta; nada se sobreescribe."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.assignment_id) pm.collectionVariables.set(\"assignment_id\", body.assignment_id);",
+          "else if (body.id) pm.collectionVariables.set(\"assignment_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Cerrar asignación vigente",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"end_reason\": \"MEMBER_REQUEST\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-assignments/{{assignment_id}}", "host": ["{{base_url}}"], "path": ["trainer-assignments", "{{assignment_id}}"] },
+        "description": "**Rol: A.** Cierra la asignación con motivo. Deja al socio sin entrenador vigente hasta la siguiente `POST /trainer-assignments`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"204 No Content\", function () { pm.response.to.have.status(204); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Filtrar cartera de otro entrenador (Error - FORBIDDEN_RESOURCE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/trainer-assignments?trainer_id=99999",
+          "host": ["{{base_url}}"],
+          "path": ["trainer-assignments"],
+          "query": [{ "key": "trainer_id", "value": "99999" }]
+        },
+        "description": "Un entrenador solo puede filtrar `trainer_id` con su propio id. Con cualquier otro debe rechazar.\n\n| `error_code` | HTTP |\n|---|---|\n| `FORBIDDEN_RESOURCE` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 FORBIDDEN_RESOURCE\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Asignar entrenador con cupo lleno (Error - TRAINER_CAPACITY_EXCEEDED)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"trainer_id\": {{trainer_id}}\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-assignments", "host": ["{{base_url}}"], "path": ["trainer-assignments"] },
+        "description": "**Precondición manual:** el entrenador de `trainer_id` ya debe tener `max_member_load` socios activos (repite **Asignar entrenador** con otros socios hasta llenar el cupo de 3 del setup).\n\n| `error_code` | HTTP | `suggested_action` |\n|---|---|---|\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | `CHOOSE_ANOTHER_TRAINER` |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"409 TRAINER_CAPACITY_EXCEEDED\", function () {",
+          "    pm.response.to.have.status(409);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_CAPACITY_EXCEEDED\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Exercises",
+  "item": [
+    {
+      "name": "Crear ejercicio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"SQ-BB\",\n  \"name\": \"Sentadilla con barra\",\n  \"muscle_group\": \"LEGS\",\n  \"description\": \"Barra tras nuca, cadera atrás, hasta paralela.\",\n  \"video_url\": \"https://example.com/squat\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/exercises", "host": ["{{base_url}}"], "path": ["exercises"] },
+        "description": "**Rol: A T.** Catálogo compartido, así \"press de banca\" no se duplica como texto libre."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.exercise_id) pm.collectionVariables.set(\"exercise_id\", body.exercise_id);",
+          "else if (body.id) pm.collectionVariables.set(\"exercise_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar catálogo",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/exercises?muscle_group=LEGS&active=true",
+          "host": ["{{base_url}}"],
+          "path": ["exercises"],
+          "query": [
+            { "key": "muscle_group", "value": "LEGS" },
+            { "key": "active", "value": "true" }
+          ]
+        },
+        "description": "**Rol: A T.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Corregir ejercicio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"SQ-BB\",\n  \"name\": \"Sentadilla trasera con barra\",\n  \"muscle_group\": \"LEGS\",\n  \"description\": \"Barra frontal, tronco erguido.\",\n  \"video_url\": \"https://example.com/squat-front\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/exercises/{{exercise_id}}", "host": ["{{base_url}}"], "path": ["exercises", "{{exercise_id}}"] },
+        "description": "**Rol: A T.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Desactivar ejercicio (solo admin)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/exercises/{{exercise_id}}", "host": ["{{base_url}}"], "path": ["exercises", "{{exercise_id}}"] },
+        "description": "**Rol: A.** Baja lógica: no borra, porque puede estar referenciado en `routine_exercise`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"204 No Content\", function () { pm.response.to.have.status(204); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Desactivar ejercicio como entrenador (Error - FORBIDDEN_RESOURCE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/exercises/{{exercise_id}}", "host": ["{{base_url}}"], "path": ["exercises", "{{exercise_id}}"] },
+        "description": "`DELETE /exercises/{id}` es rol **A** únicamente; el entrenador puede crear y editar, pero no desactivar.\n\n| `error_code` | HTTP |\n|---|---|\n| `FORBIDDEN_RESOURCE` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 FORBIDDEN_RESOURCE\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Routines",
+  "item": [
+    {
+      "name": "Crear rutina DRAFT",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"name\": \"Fuerza base - enero\",\n  \"goal_summary\": \"Ganar fuerza en sentadilla y press.\",\n  \"exercises\": [\n    {\n      \"exercise_id\": {{exercise_id}},\n      \"weekday\": \"MONDAY\",\n      \"display_order\": 1,\n      \"sets\": 4,\n      \"repetitions\": 8,\n      \"rest_seconds\": 120,\n      \"notes\": \"Subir peso progresivo\"\n    }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/routines", "host": ["{{base_url}}"], "path": ["routines"] },
+        "description": "**Rol: T.** El socio debe estar asignado a quien la crea. Nace en `DRAFT`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.routine_id) pm.collectionVariables.set(\"routine_id\", body.routine_id);",
+          "else if (body.id) pm.collectionVariables.set(\"routine_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar histórico del socio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/routines?member_id={{member_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["routines"],
+          "query": [{ "key": "member_id", "value": "{{member_id}}" }]
+        },
+        "description": "**Rol: A T S.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Detalle de la rutina",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/routines/{{routine_id}}", "host": ["{{base_url}}"], "path": ["routines", "{{routine_id}}"] },
+        "description": "**Rol: A T S.** Ejercicios agrupados por día."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Publicar rutina",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"PUBLISHED\"\n}" },
+        "url": { "raw": "{{base_url}}/routines/{{routine_id}}/status", "host": ["{{base_url}}"], "path": ["routines", "{{routine_id}}", "status"] },
+        "description": "**Rol: T.** `uq_routine_published` garantiza una sola rutina vigente por socio."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Reemplazar rutina",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"name\": \"Fuerza base - febrero\",\n  \"goal_summary\": \"Enfocarse en sentadilla.\",\n  \"exercises\": [\n    {\n      \"exercise_id\": {{exercise_id}},\n      \"weekday\": \"WEDNESDAY\",\n      \"display_order\": 1,\n      \"sets\": 5,\n      \"repetitions\": 5,\n      \"rest_seconds\": 180\n    }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/routines/{{routine_id}}", "host": ["{{base_url}}"], "path": ["routines", "{{routine_id}}"] },
+        "description": "**Rol: T.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Archivar rutina",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"ARCHIVED\"\n}" },
+        "url": { "raw": "{{base_url}}/routines/{{routine_id}}/status", "host": ["{{base_url}}"], "path": ["routines", "{{routine_id}}", "status"] },
+        "description": "**Rol: T.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Crear rutina para socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": 999999,\n  \"name\": \"Rutina fuera de alcance\",\n  \"exercises\": []\n}"
+        },
+        "url": { "raw": "{{base_url}}/routines", "host": ["{{base_url}}"], "path": ["routines"] },
+        "description": "Un entrenador solo puede crear rutinas para socios de `trainer_assignment` con él vigente.\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+{
+  "name": "Measurements",
+  "item": [
+    {
+      "name": "Registrar medición",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"measured_on\": \"2026-01-11\",\n  \"weight_kg\": 72.5,\n  \"waist_cm\": 82.0,\n  \"arm_cm\": 35.5,\n  \"leg_cm\": 58.0,\n  \"body_fat_percent\": 18.5,\n  \"notes\": \"Medición inicial\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/{{member_id}}/measurements", "host": ["{{base_url}}"], "path": ["members", "{{member_id}}", "measurements"] },
+        "description": "**Rol: T.** `UNIQUE (member_id, measured_on)` evita dos mediciones el mismo día."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.measurement_id) pm.collectionVariables.set(\"measurement_id\", body.measurement_id);",
+          "else if (body.id) pm.collectionVariables.set(\"measurement_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Historial de mediciones",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/{{member_id}}/measurements?from=2026-01-01&to=2026-12-31",
+          "host": ["{{base_url}}"],
+          "path": ["members", "{{member_id}}", "measurements"],
+          "query": [
+            { "key": "from", "value": "2026-01-01" },
+            { "key": "to", "value": "2026-12-31" }
+          ]
+        },
+        "description": "**Rol: A T S.** Base de la gráfica de evolución."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Corregir medición",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"measured_on\": \"2026-01-11\",\n  \"weight_kg\": 72.5,\n  \"waist_cm\": 81.5,\n  \"arm_cm\": 35.5,\n  \"leg_cm\": 58.0,\n  \"body_fat_percent\": 18.0\n}"
+        },
+        "url": { "raw": "{{base_url}}/measurements/{{measurement_id}}", "host": ["{{base_url}}"], "path": ["measurements", "{{measurement_id}}"] },
+        "description": "**Rol: T.** Solo el entrenador que la registró."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Eliminar medición",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/measurements/{{measurement_id}}", "host": ["{{base_url}}"], "path": ["measurements", "{{measurement_id}}"] },
+        "description": "**Rol: T.** Corrige una captura errónea."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"204 No Content\", function () { pm.response.to.have.status(204); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Medir socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"measured_on\": \"2026-01-16\",\n  \"weight_kg\": 70.0\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/999999/measurements", "host": ["{{base_url}}"], "path": ["members", "999999", "measurements"] },
+        "description": "Seguridad de primer orden: un entrenador solo lee/escribe datos de los socios que tiene asignados.\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Medición duplicada en la misma fecha (Error - MEASUREMENT_DUPLICATE_DATE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"measured_on\": \"2026-01-11\",\n  \"weight_kg\": 72.0\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/{{member_id}}/measurements", "host": ["{{base_url}}"], "path": ["members", "{{member_id}}", "measurements"] },
+        "description": "**Precondición:** correr esto justo después de **Registrar medición** (misma `measured_on: 2026-01-11`), sin haber corrido **Eliminar medición** antes.\n\n| `error_code` | HTTP |\n|---|---|\n| `MEASUREMENT_DUPLICATE_DATE` | 409 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"409 MEASUREMENT_DUPLICATE_DATE\", function () {",
+          "    pm.response.to.have.status(409);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"MEASUREMENT_DUPLICATE_DATE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Trainer Notes",
+  "item": [
+    {
+      "name": "Dejar observación nutricional",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note_type\": \"NUTRITION\",\n  \"content\": \"Aumentar consumo de proteína en la cena.\",\n  \"reference_date\": \"2026-01-15\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/{{member_id}}/notes", "host": ["{{base_url}}"], "path": ["members", "{{member_id}}", "notes"] },
+        "description": "**Rol: T.** Requiere revisar antes el registro de alimentación del socio (`GET /meals?member_id=`), permitido solo si está asignado."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.note_id) pm.collectionVariables.set(\"note_id\", body.note_id);",
+          "else if (body.id) pm.collectionVariables.set(\"note_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar observaciones",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/{{member_id}}/notes?note_type=NUTRITION",
+          "host": ["{{base_url}}"],
+          "path": ["members", "{{member_id}}", "notes"],
+          "query": [{ "key": "note_type", "value": "NUTRITION" }]
+        },
+        "description": "**Rol: A T S.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Dejar observación a socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note_type\": \"GENERAL\",\n  \"content\": \"No debería poder escribir esto.\",\n  \"reference_date\": \"2026-01-16\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/999999/notes", "host": ["{{base_url}}"], "path": ["members", "999999", "notes"] },
+        "description": "Aplica a rutinas, mediciones **y sobre todo al registro nutricional**, según la regla de visibilidad del módulo.\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Trainer Alerts",
+  "item": [
+    {
+      "name": "Escalar alerta al administrador",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"alert_type\": \"REASSIGNMENT\",\n  \"description\": \"El socio necesita un entrenador con más experiencia en hipertrofia.\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-alerts", "host": ["{{base_url}}"], "path": ["trainer-alerts"] },
+        "description": "**Rol: T.** Cubre los dos casos del enunciado con `alert_type`: `REASSIGNMENT` o `SPECIAL_ATTENTION`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.alert_id) pm.collectionVariables.set(\"alert_id\", body.alert_id);",
+          "else if (body.id) pm.collectionVariables.set(\"alert_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Cola de alertas",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/trainer-alerts?status=PENDING",
+          "host": ["{{base_url}}"],
+          "path": ["trainer-alerts"],
+          "query": [{ "key": "status", "value": "PENDING" }]
+        },
+        "description": "**Rol: A T.** El admin ve todas; el entrenador solo las suyas."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Resolver alerta",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"RESOLVED\",\n  \"resolution_notes\": \"Se reasignó a otro entrenador.\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-alerts/{{alert_id}}/status", "host": ["{{base_url}}"], "path": ["trainer-alerts", "{{alert_id}}", "status"] },
+        "description": "**Rol: A.** El frontend decide la acción concreta según `alert_type` antes de llamar esto."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Resolver alerta como entrenador (Error - FORBIDDEN_RESOURCE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"DISMISSED\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-alerts/{{alert_id}}/status", "host": ["{{base_url}}"], "path": ["trainer-alerts", "{{alert_id}}", "status"] },
+        "description": "El entrenador escala, pero solo el administrador resuelve o descarta.\n\n| `error_code` | HTTP |\n|---|---|\n| `FORBIDDEN_RESOURCE` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 FORBIDDEN_RESOURCE\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
 }
+
     
   ]
 }

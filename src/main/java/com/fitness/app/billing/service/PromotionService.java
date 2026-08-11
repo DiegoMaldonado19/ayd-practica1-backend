@@ -22,17 +22,37 @@ public class PromotionService {
 
     private final PromotionRepository promotionRepository;
 
+    /**
+     * Lista promociones, filtrando por activas si se indica.
+     *
+     * @param active   true para solo activas, false para solo inactivas, null para todas
+     * @param pageable paginación
+     * @return página de PromotionResponse
+     */
     @Transactional(readOnly = true)
     public Page<PromotionResponse> list(Boolean active, Pageable pageable) {
         Page<Promotion> page = (active != null) ? promotionRepository.findByActive(active, pageable) : promotionRepository.findAll(pageable);
         return page.map(PromotionResponse::from);
     }
 
+    /**
+     * Recupera una promoción por su id.
+     *
+     * @param promotionId id de la promoción
+     * @return PromotionResponse encontrado
+     */
     @Transactional(readOnly = true)
     public PromotionResponse findById(Long promotionId) {
         return PromotionResponse.from(findEntity(promotionId));
     }
 
+    /**
+     * Crea una nueva promoción y la activa.
+     *
+     * @param request   datos de la promoción
+     * @param principal usuario autenticado que autoriza la promoción
+     * @return PromotionResponse creado
+     */
     @Transactional
     public PromotionResponse create(PromotionRequest request, AuthenticatedUser principal) {
         promotionRepository.findByCode(request.code()).ifPresent(p -> {
@@ -48,6 +68,13 @@ public class PromotionService {
         return PromotionResponse.from(promotionRepository.save(promotion));
     }
 
+    /**
+     * Actualiza una promoción existente.
+     *
+     * @param promotionId id de la promoción
+     * @param request     datos actualizados
+     * @return PromotionResponse actualizado
+     */
     @Transactional
     public PromotionResponse update(Long promotionId, PromotionRequest request) {
         Promotion promotion = findEntity(promotionId);
@@ -55,6 +82,13 @@ public class PromotionService {
         return PromotionResponse.from(promotion);
     }
 
+    /**
+     * Activa o desactiva una promoción.
+     *
+     * @param promotionId id de la promoción
+     * @param active      nuevo estado de la promoción
+     * @return PromotionResponse actualizado
+     */
     @Transactional
     public PromotionResponse updateStatus(Long promotionId, boolean active) {
         Promotion promotion = findEntity(promotionId);
@@ -62,6 +96,12 @@ public class PromotionService {
         return PromotionResponse.from(promotion);
     }
 
+    /**
+     * Recupera una promoción activa y válida para uso inmediato.
+     *
+     * @param promotionId id de la promoción
+     * @return promoción válida
+     */
     @Transactional(readOnly = true)
     public Promotion getActiveAndValid(Long promotionId) {
         Promotion promotion = findEntity(promotionId);

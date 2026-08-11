@@ -88,7 +88,7 @@ public class PaymentController {
     /**
      * Anula un pago existente con la razón indicada.
      *
-     * @param id      id del pago
+     * @param id id del pago
      * @param request detalles de la anulación
      * @return `PaymentResponse` actualizado
      */
@@ -101,7 +101,7 @@ public class PaymentController {
     /**
      * Obtiene el recibo de un pago confirmado, si está disponible.
      *
-     * @param id        id del pago
+     * @param id id del pago
      * @param principal usuario autenticado
      * @return `ReceiptResponse` del recibo
      */
