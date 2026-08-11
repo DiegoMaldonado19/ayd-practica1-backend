@@ -131,6 +131,37 @@ public class SecurityConfig
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
                     // training. Only the trainer-member relationship so far; the rest
                     // of §3.7 arrives with its own module. Everyone reads it -the
+                                        // training. §3.7. GET /members/{id}/trainer y la transferencia ya
+                    // estaban; llegan el libro de asignaciones, el catálogo de ejercicios,
+                    // las rutinas, el seguimiento y la cola de alertas.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/trainer")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members/*/trainer").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/trainers/*/member-transfers").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/trainer-assignments")
+                            .hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/trainer-assignments").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/trainer-assignments/*").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/exercises").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/exercises").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/exercises/*").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/exercises/*").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/routines").hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/routines").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/routines/*").hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/routines/*").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/routines/*/status").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/measurements")
+                            .hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members/*/measurements").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/measurements/*").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/measurements/*").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/notes")
+                            .hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members/*/notes").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/trainer-alerts").hasAnyRole("ADMIN", "TRAINER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/trainer-alerts").hasRole("TRAINER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/trainer-alerts/*/status").hasRole("ADMIN")
                     // member checks who their trainer is- but the administrator "es el
                     // único usuario autorizado para asignar formalmente un entrenador
                     // personal a un socio" (Enunciado), so the receptionist is out.

@@ -63,7 +63,8 @@ public enum ErrorCode
     MEAL_EDIT_WINDOW_CLOSED       (HttpStatus.CONFLICT,            null,                      "Solo puedes editar comidas registradas el mismo día."),
     MEASUREMENT_DUPLICATE_DATE    (HttpStatus.CONFLICT,            null,                      "Ya existe una medición de este socio en esa fecha."),
     FOOD_IN_USE                   (HttpStatus.CONFLICT,            "DEACTIVATE_INSTEAD",      "El alimento ya se usó en comidas registradas."),
-
+    INVALID_ROUTINE_STATUS_TRANSITION(HttpStatus.CONFLICT,         null,                      "El cambio de estado de la rutina no está permitido."),
+    TRAINER_ALERT_ALREADY_CLOSED  (HttpStatus.CONFLICT,            null,                      "La alerta ya fue resuelta o descartada."),
     // --- Billing --------------------------------------------------------------
     PROMOTION_NOT_APPLICABLE      (HttpStatus.CONFLICT,            null,                      "La promoción está vencida, inactiva o no aplica a este plan."),
     PROMOTION_USES_EXCEEDED       (HttpStatus.CONFLICT,            null,                      "Se agotaron los usos de la promoción."),
@@ -98,6 +99,11 @@ public enum ErrorCode
     WAITLIST_ENTRY_NOT_FOUND      (HttpStatus.NOT_FOUND,           null,                      "La entrada en la lista de espera no existe."),
     NOTIFICATION_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "El aviso no existe."),
     TRAINER_ASSIGNMENT_NOT_FOUND  (HttpStatus.NOT_FOUND,           null,                      "El socio no tiene un entrenador asignado."),
+    EXERCISE_NOT_FOUND            (HttpStatus.NOT_FOUND,           null,                      "El ejercicio no existe."),
+    ROUTINE_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "La rutina no existe."),
+    MEASUREMENT_NOT_FOUND         (HttpStatus.NOT_FOUND,           null,                      "La medición no existe."),
+    TRAINER_NOTE_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "La observación no existe."),
+    TRAINER_ALERT_NOT_FOUND       (HttpStatus.NOT_FOUND,           null,                      "La alerta no existe."),
 
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),

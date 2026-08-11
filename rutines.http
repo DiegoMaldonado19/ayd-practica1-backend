@@ -1,0 +1,413 @@
+# =============================================================================
+# training.http — Pruebas del módulo Entrenamiento personal (REST Client)
+#
+# Proyecto: Sistema de Gestión de Gimnasio · ayd-practica1-backend
+# Instrucciones de contraste: instructiones_oc/03-API-REST.md (§3.7 training),
+#                             instructiones_oc/02-Modulos.md (módulo 7).
+#
+# Precondiciones:
+#   1. docker compose up -d --wait
+#   2. Login de admin en data.sql (admin / Admin123*, 2FA desactivado).
+#   3. El trainer y el socio se crean en la sección B (el trainer con 2FA activo:
+#      docker logs fitness_backend | grep -i verification).
+# =============================================================================
+
+@baseUrl = http://localhost:8080/api/v1
+
+@admin_username = admin
+@admin_password = Admin123*
+
+@member_username = ana.lopez
+@member_password = Socio123*
+
+@member_code = 000000
+
+# =============================================================================
+# A. AUTENTICACIÓN
+# =============================================================================
+
+### A.1 LOGIN ADMIN
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{admin_username}}",
+  "password": "{{admin_password}}"
+}
+
+### A.2 LOGIN MEMBER (2FA: pegar el código del log en @member_code)
+# @name loginMember
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{member_username}}",
+  "password": "{{member_password}}"
+}
+
+### A.3 LOGIN TRAINER (2FA: pegar el código del log)
+# @name loginTrainer
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "luis.ramos",
+  "password": "Trainer123*"
+}
+
+### A.4 CONFIRMAR CÓDIGO 2FA (socio)
+# @name confirmMember
+POST {{baseUrl}}/auth/challenges/{{loginMember.response.body.challenge_id}}/verifications
+Content-Type: application/json
+
+{
+  "code": "{{member_code}}"
+}
+
+### A.5 CONFIRMAR CÓDIGO 2FA (trainer)
+# @name confirmTrainer
+POST {{baseUrl}}/auth/challenges/{{loginTrainer.response.body.challenge_id}}/verifications
+Content-Type: application/json
+
+{
+  "code": "{{member_code}}"
+}
+
+# =============================================================================
+# B. PREPARACIÓN MÍNIMA (socio, trainer y asignación)
+# =============================================================================
+
+### B.1 · Alta del socio
+# @name createMember
+POST {{baseUrl}}/members
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "person": {
+    "document_type": "DUI",
+    "document_number": "04567890-1",
+    "first_name": "Ana",
+    "last_name": "López",
+    "gender": "F",
+    "birth_date": "1995-04-12",
+    "email": "ana.lopez@example.com",
+    "phone": "7012-3456",
+    "address": "Zona 10"
+  },
+  "emergency_contact_name": "Carlos López",
+  "emergency_contact_phone": "5123-4567",
+  "notes": ""
+}
+
+### B.2 · Alta del empleado/trainer (rol TRAINER en el paso B.3)
+# @name createTrainerEmployee
+POST {{baseUrl}}/employees
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "person": {
+    "document_type": "DUI",
+    "document_number": "09988777-1",
+    "first_name": "Luis",
+    "last_name": "Ramos",
+    "gender": "M",
+    "birth_date": "1990-01-15",
+    "email": "luis.ramos@example.com",
+    "phone": "7012-9090"
+  },
+  "role": "TRAINER",
+  "trainer_profile": {
+    "max_member_load": 10,
+    "bio": "Especialista en fuerza",
+    "specialties": ["STRENGTH", "HYPERTROPHY"]
+  }
+}
+
+### B.3 · Contratar plan ÉLITE al socio (el personal trainer es beneficio Élite)
+# @name createMembership
+POST {{baseUrl}}/memberships
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "membership_plan_id": 1,
+  "start_date": "2026-01-01",
+  "paid_price": 499.99
+}
+
+### B.4 · Asignar entrenador (POST /members/{id}/trainer o POST /trainer-assignments)
+# @name assignTrainer
+POST {{baseUrl}}/trainer-assignments
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "trainer_id": {{createTrainerEmployee.response.body.trainer_id}}
+}
+
+# =============================================================================
+# C. ASIGNACIONES (§3.7)
+# =============================================================================
+
+### C.1 · Listado y cartera (admin)
+GET {{baseUrl}}/trainer-assignments?active=true
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+
+### C.2 · Listado con filtros (trainer: solo su propia cartera)
+GET {{baseUrl}}/trainer-assignments?trainer_id={{createTrainerEmployee.response.body.trainer_id}}&active=true
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+
+### C.3 · Reasignar a otro trainer (cierra la anterior con REASSIGNMENT)
+POST {{baseUrl}}/trainer-assignments
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "trainer_id": 2
+}
+
+### C.4 · Cerrar la asignación vigente con su motivo
+DELETE {{baseUrl}}/trainer-assignments/{{assignTrainer.response.body.trainer_assignment_id}}
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "end_reason": "MEMBER_REQUEST"
+}
+
+# =============================================================================
+# D. CATÁLOGO DE EJERCICIOS (§3.7)
+# =============================================================================
+
+### D.1 · Crear un ejercicio (admin o trainer)
+# @name createExercise
+POST {{baseUrl}}/exercises
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "code": "SQ-BB",
+  "name": "Sentadilla con barra",
+  "muscle_group": "LEGS",
+  "description": "Barra tras nuca, cadera atrás, hasta paralela.",
+  "video_url": "https://example.com/squat"
+}
+
+### D.2 · Listar catálogo (admin o trainer)
+GET {{baseUrl}}/exercises?muscle_group=LEGS&active=true
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+
+### D.3 · Corregir un ejercicio (admin o trainer)
+PUT {{baseUrl}}/exercises/{{createExercise.response.body.exercise_id}}
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "code": "SQ-BB",
+  "name": "Sentadilla con barra (frontal)",
+  "muscle_group": "LEGS",
+  "description": "Barra frontal, tronco erguido.",
+  "video_url": "https://example.com/squat-front"
+}
+
+### D.4 · Desactivar un ejercicio (solo admin)
+DELETE {{baseUrl}}/exercises/{{createExercise.response.body.exercise_id}}
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+
+# =============================================================================
+# E. RUTINAS (§3.7)
+# =============================================================================
+
+### E.1 · Crear rutina DRAFT (trainer; el socio debe estar asignado)
+# @name createRoutine
+POST {{baseUrl}}/routines
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "name": "Fuerza base - enero",
+  "goal_summary": "Ganar fuerza en sentadilla y press.",
+  "exercises": [
+    {
+      "exercise_id": {{createExercise.response.body.exercise_id}},
+      "weekday": "MONDAY",
+      "display_order": 1,
+      "sets": 4,
+      "repetitions": 8,
+      "rest_seconds": 120,
+      "notes": "Subir peso progresivo"
+    },
+    {
+      "exercise_id": 2,
+      "weekday": "WEDNESDAY",
+      "display_order": 1,
+      "sets": 3,
+      "repetitions": 10,
+      "rest_seconds": 90
+    }
+  ]
+}
+
+### E.2 · Listado e histórico de un socio (admin / trainer / socio)
+GET {{baseUrl}}/routines?member_id={{createMember.response.body.member_id}}
+Authorization: Bearer {{loginMember.response.body.access_token}}
+
+### E.3 · Detalle con ejercicios agrupados por día
+GET {{baseUrl}}/routines/{{createRoutine.response.body.routine_id}}
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+
+### E.4 · Publicar la rutina (queda como la vigente del socio)
+PATCH {{baseUrl}}/routines/{{createRoutine.response.body.routine_id}}/status
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "status": "PUBLISHED"
+}
+
+### E.5 · Reemplazar rutina y ejercicios
+PUT {{baseUrl}}/routines/{{createRoutine.response.body.routine_id}}
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "name": "Fuerza base - febrero",
+  "goal_summary": "Enfocarse en sentadilla.",
+  "exercises": [
+    {
+      "exercise_id": {{createExercise.response.body.exercise_id}},
+      "weekday": "MONDAY",
+      "display_order": 1,
+      "sets": 5,
+      "repetitions": 5,
+      "rest_seconds": 180
+    }
+  ]
+}
+
+### E.6 · Archivar la rutina
+PATCH {{baseUrl}}/routines/{{createRoutine.response.body.routine_id}}/status
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "status": "ARCHIVED"
+}
+
+# =============================================================================
+# F. MEDICIONES DE PROGRESO (§3.7)
+# =============================================================================
+
+### F.1 · Registrar una medición fechada (trainer)
+# @name createMeasurement
+POST {{baseUrl}}/members/{{createMember.response.body.member_id}}/measurements
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "measured_on": "2026-01-15",
+  "weight_kg": 72.5,
+  "waist_cm": 82.0,
+  "arm_cm": 35.5,
+  "leg_cm": 58.0,
+  "body_fat_percent": 18.5,
+  "notes": "Medición inicial"
+}
+
+### F.2 · Historial (base de la gráfica de evolución)
+GET {{baseUrl}}/members/{{createMember.response.body.member_id}}/measurements?from=2026-01-01&to=2026-12-31
+Authorization: Bearer {{loginMember.response.body.access_token}}
+
+### F.3 · Corregir una medición (el trainer que la registró)
+PUT {{baseUrl}}/measurements/{{createMeasurement.response.body.progress_measurement_id}}
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "measured_on": "2026-01-15",
+  "weight_kg": 72.5,
+  "waist_cm": 81.5,
+  "arm_cm": 35.5,
+  "leg_cm": 58.0,
+  "body_fat_percent": 18.0
+}
+
+### F.4 · Eliminar una medición mal capturada
+DELETE {{baseUrl}}/measurements/{{createMeasurement.response.body.progress_measurement_id}}
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+
+# =============================================================================
+# G. OBSERVACIONES DEL ENTRENADOR (§3.7)
+# =============================================================================
+
+### G.1 · Dejar una observación / recomendación nutricional (trainer)
+# @name createNote
+POST {{baseUrl}}/members/{{createMember.response.body.member_id}}/notes
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "note_type": "NUTRITION",
+  "content": "Aumentar proteína a 1.8 g/kg, priorizar pollo y pescado.",
+  "reference_date": "2026-01-15"
+}
+
+### G.2 · Listar observaciones (admin / trainer / socio)
+GET {{baseUrl}}/members/{{createMember.response.body.member_id}}/notes?note_type=NUTRITION
+Authorization: Bearer {{loginMember.response.body.access_token}}
+
+# =============================================================================
+# H. ALERTAS AL ADMINISTRADOR (§3.7)
+# =============================================================================
+
+### H.1 · Escalar reasignación o atención especial (trainer)
+# @name createAlert
+POST {{baseUrl}}/trainer-alerts
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "member_id": {{createMember.response.body.member_id}},
+  "alert_type": "REASSIGNMENT",
+  "description": "El socio necesita un entrenador con más experiencia en hipertrofia."
+}
+
+### H.2 · Cola de alertas (admin ve todas, el trainer solo las suyas)
+GET {{baseUrl}}/trainer-alerts?status=PENDING
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+
+### H.3 · Resolver la alerta (solo admin)
+PATCH {{baseUrl}}/trainer-alerts/{{createAlert.response.body.trainer_alert_id}}/status
+Authorization: Bearer {{loginAdmin.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "status": "RESOLVED",
+  "resolution_notes": "Se reasignó al entrenador 2."
+}
+
+# =============================================================================
+# I. ALCANCE DEL ENTRENADOR (negativo)
+# =============================================================================
+
+### I.1 · El trainer NO puede medir a un socio no asignado (403 TRAINER_SCOPE_VIOLATION)
+POST {{baseUrl}}/members/999/measurements
+Authorization: Bearer {{loginTrainer.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "measured_on": "2026-01-16",
+  "weight_kg": 70.0
+}
+
+### I.2 · El trainer NO puede filtrar la cartera de otro (403 FORBIDDEN_RESOURCE)
+GET {{baseUrl}}/trainer-assignments?trainer_id=2
+Authorization: Bearer {{loginTrainer.response.body.access_token}}

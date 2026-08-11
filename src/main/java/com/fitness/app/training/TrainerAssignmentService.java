@@ -2,6 +2,9 @@ package com.fitness.app.training;
 
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
+import com.fitness.app.directory.TrainerService;
+import com.fitness.app.iam.dto.AuthenticatedUser;
+import com.fitness.app.iam.model.UserRole;
 import com.fitness.app.membership.MembershipService;
 import com.fitness.app.membership.model.PlanBenefit;
 import com.fitness.app.notification.NotificationService;
@@ -9,6 +12,9 @@ import com.fitness.app.training.dto.TrainerAssignmentResponse;
 import com.fitness.app.training.model.AssignmentEndReason;
 import com.fitness.app.training.model.TrainerAssignment;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +38,7 @@ import java.util.List;
 public class TrainerAssignmentService
 {
     private final TrainerAssignmentRepository trainerAssignmentRepository;
+    private final TrainerService trainerService;
     private final MembershipService           membershipService;
     private final NotificationService         notificationService;
 
@@ -43,6 +50,35 @@ public class TrainerAssignmentService
                 .map(TrainerAssignment::getTrainerId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_ASSIGNMENT_NOT_FOUND));
     }
+
+    /**
+     * "Listado y cartera de un entrenador. Filtros: member_id, trainer_id, active"
+     * (§3.7). "El entrenador solo puede filtrar por sí mismo": whatever filter a TRAINER
+     * passes, the search is scoped to their own trainerId; asking for another's is
+     * FORBIDDEN_RESOURCE. ADMIN sees the whole book.
+     */
+    @Transactional(readOnly = true)
+    public Page<TrainerAssignmentResponse> search(Long memberId, Long trainerId, Boolean active,
+                                                  AuthenticatedUser principal, Pageable pageable)
+    {
+        var scopedTrainerId = trainerId;
+
+        if (principal.role() == UserRole.TRAINER)
+        {
+            var selfTrainerId = trainerService.findTrainerIdByUser(principal);
+
+            if (trainerId != null && !trainerId.equals(selfTrainerId))
+            {
+                throw new BusinessException(ErrorCode.FORBIDDEN_RESOURCE);
+            }
+
+            scopedTrainerId = selfTrainerId;
+        }
+
+        return trainerAssignmentRepository.search(memberId, scopedTrainerId, active, pageable)
+                .map(TrainerAssignmentResponse::from);
+    }
+
 
     /** "El entrenador solo ve a los suyos" (§3.2): the fact directory asks about. */
     @Transactional(readOnly = true)
@@ -150,4 +186,67 @@ public class TrainerAssignmentService
 
         return assignment;
     }
+
+    /**
+     * "DELETE /trainer-assignments/{id}: cierra la asignación vigente con su motivo"
+     * (§3.7). A closed row is closed: closing twice is INVALID_STATE_TRANSITION.
+     */
+    public TrainerAssignmentResponse closeAssignment(Long assignmentId, AssignmentEndReason endReason)
+    {
+        var assignment = trainerAssignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_ASSIGNMENT_NOT_FOUND));
+
+        if (assignment.getEndDate() != null)
+        {
+            throw new BusinessException(ErrorCode.INVALID_STATE_TRANSITION);
+        }
+
+        assignment.close(LocalDate.now(), endReason);
+
+        return TrainerAssignmentResponse.from(assignment);
+    }
+
+    /**
+     * "POST /trainer-assignments: asigna entrenador a un socio... Cierra la asignación
+     * anterior si existía" (§3.7). Unlike assign (the §3.2 endpoint, which refuses a
+     * second trainer), this is the reassignment path: the previous stretch is closed
+     * with REASSIGNMENT and a fresh one is opened, so the history is kept - the same
+     * "sin perder el historial" rule as transferCaseload.
+     *
+     * uq_assign_current requires the closing update to reach the database before the
+     * insert, hence the flush, exactly as in transferCaseload. Reassigning the same
+     * trainer is a no-op and refused, not a silent re-open.
+     */
+    public TrainerAssignmentResponse reassign(Long memberId, Long trainerId, short maxMemberLoad,
+                                              String trainerName, Long assignedByUserId)
+    {
+        if (!membershipService.hasBenefit(memberId, PlanBenefit.PERSONAL_TRAINER))
+        {
+            throw new BusinessException(ErrorCode.PLAN_BENEFIT_NOT_INCLUDED);
+        }
+
+        var current = trainerAssignmentRepository.findByMemberIdAndEndDateIsNull(memberId);
+
+        if (current.isPresent() && current.get().getTrainerId().equals(trainerId))
+        {
+            throw new BusinessException(ErrorCode.TRAINER_ALREADY_ASSIGNED);
+        }
+
+        if (trainerAssignmentRepository.countByTrainerIdAndEndDateIsNull(trainerId) >= maxMemberLoad)
+        {
+            throw new BusinessException(ErrorCode.TRAINER_CAPACITY_EXCEEDED);
+        }
+
+        current.ifPresent(assignment -> assignment.close(LocalDate.now(), AssignmentEndReason.REASSIGNMENT));
+        trainerAssignmentRepository.flush();
+
+        var assignment = open(memberId, trainerId, LocalDate.now(), Instant.now(), assignedByUserId);
+
+        trainerAssignmentRepository.save(assignment);
+        notificationService.trainerAssigned(memberId, trainerName);
+
+        return TrainerAssignmentResponse.from(assignment);
+    }
+
+
 }
