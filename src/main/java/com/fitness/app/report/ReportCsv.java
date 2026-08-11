@@ -1,5 +1,6 @@
 package com.fitness.app.report;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,8 @@ public class ReportCsv
 {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    private static final TypeReference<Map<String, Object>> ROW_TYPE = new TypeReference<>() {};
+
     public String toCsv(List<?> rows)
     {
         if (rows.isEmpty())
@@ -27,7 +30,7 @@ public class ReportCsv
         var stringWriter = new StringWriter();
         var writer = new PrintWriter(stringWriter);
 
-        var firstRow = objectMapper.convertValue(rows.get(0), Map.class);
+        var firstRow = objectMapper.convertValue(rows.get(0), ROW_TYPE);
         var headers = firstRow.keySet();
 
         // Write headers
@@ -39,9 +42,9 @@ public class ReportCsv
         // Write data rows
         for (var row : rows)
         {
-            var map = objectMapper.convertValue(row, Map.class);
+            var map = objectMapper.convertValue(row, ROW_TYPE);
             var values = headers.stream()
-                    .map(header -> map.get(header))
+                    .map(map::get)
                     .map(this::escapeCsvValue)
                     .toList();
             var dataLine = String.join(",", values);
