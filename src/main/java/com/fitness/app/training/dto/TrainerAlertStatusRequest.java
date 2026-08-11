@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** "PATCH /trainer-alerts/{id}/status: resuelve o descarta la alerta" (§3.7). */
 public record TrainerAlertStatusRequest(
     @NotNull
     TrainerAlertStatus status,

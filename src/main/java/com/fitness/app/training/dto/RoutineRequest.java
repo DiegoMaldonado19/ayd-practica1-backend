@@ -10,12 +10,6 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Creates or replaces a routine "con sus ejercicios por día" (§3.7). The member is in
- * the body because the route is /routines, not /members/{id}/routines. startDate and
- * status are not here: they default to today and DRAFT, and status changes by its own
- * PATCH.
- */
 public record RoutineRequest(
     @NotNull
     @JsonProperty("member_id")

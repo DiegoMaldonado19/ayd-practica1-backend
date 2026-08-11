@@ -15,11 +15,6 @@ import lombok.Setter;
 
 import java.time.DayOfWeek;
 
-/**
- * An exercise of a routine, for one suggested day. weekday lives here instead of in a
- * routine_day table because that table would hold nothing but the day of the week
- * (schema.sql). Both relationships stay inside this module, so they are real @ManyToOne.
- */
 @Entity
 @Getter
 @Setter

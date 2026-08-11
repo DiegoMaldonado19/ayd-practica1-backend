@@ -33,6 +33,15 @@ public class MemberMeasurementController
     private final ProgressMeasurementService progressMeasurementService;
 
     @GetMapping
+    /**
+     * Devuelve el historial de mediciones de un socio en un rango de fechas.
+     *
+     * @param memberId  id del socio
+     * @param from  fecha inicial del filtro (opcional)
+     * @param to fecha final del filtro (opcional)
+     * @param principal usuario autenticado que realiza la consulta
+     * @return lista de mediciones ordenadas por fecha ascendente
+     */
     public List<ProgressMeasurementResponse> history(@PathVariable Long memberId,
                                                      @RequestParam(required = false) LocalDate from,
                                                      @RequestParam(required = false) LocalDate to,

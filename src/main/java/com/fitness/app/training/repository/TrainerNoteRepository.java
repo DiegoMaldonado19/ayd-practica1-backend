@@ -12,10 +12,10 @@ public interface TrainerNoteRepository extends JpaRepository<TrainerNote, Long>
     /** "Observaciones del entrenador. Filtro: note_type" (§3.7): newest first. */
     @Query("""
            SELECT n
-             FROM TrainerNote n
-            WHERE n.memberId = :memberId
-              AND (:noteType IS NULL OR n.noteType = :noteType)
-            ORDER BY n.createdAt DESC
+              FROM TrainerNote n
+              WHERE n.memberId = :memberId
+                AND n.noteType = COALESCE(:noteType, n.noteType)
+              ORDER BY n.createdAt DESC
            """)
     List<TrainerNote> findByMember(Long memberId, TrainerNoteType noteType);
 }

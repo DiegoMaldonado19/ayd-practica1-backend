@@ -12,13 +12,6 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/**
- * The trainer escalates to the administrator: either the member should be reassigned
- * to a colleague, or the member needs special attention.
- *
- * A row is open (PENDING, resolved_at IS NULL) or closed (RESOLVED/DISMISSED with a
- * timestamp), never half of each: that is ck_alert_closed.
- */
 @Entity
 @Getter
 @Setter
@@ -45,7 +38,6 @@ public class TrainerAlert
     private Long               resolvedByUserId;
     private String             resolutionNotes;
 
-    /** Closes the alert as RESOLVED; ck_alert_closed demands the timestamp move together. */
     public void resolve(Instant now, Long resolvedByUserId, String resolutionNotes)
     {
         this.status            = TrainerAlertStatus.RESOLVED;

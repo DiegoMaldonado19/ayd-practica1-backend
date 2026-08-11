@@ -15,9 +15,9 @@ public interface TrainerAlertRepository extends JpaRepository<TrainerAlert, Long
      */
     @Query("""
            SELECT a
-             FROM TrainerAlert a
-            WHERE (:trainerId IS NULL OR a.trainerId = :trainerId)
-              AND (:status IS NULL OR a.status = :status)
+            FROM TrainerAlert a
+            WHERE a.trainerId = COALESCE(:trainerId, a.trainerId)
+              AND a.status = COALESCE(:status, a.status)
             ORDER BY a.createdAt DESC
            """)
     Page<TrainerAlert> search(Long trainerId, TrainerAlertStatus status, Pageable pageable);

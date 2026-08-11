@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** One dated measurement as the interface sees it. */
 public record ProgressMeasurementResponse(
     @JsonProperty("progress_measurement_id")
     Long         progressMeasurementId,

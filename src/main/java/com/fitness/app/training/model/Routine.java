@@ -17,14 +17,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A member's personal routine. The archived ones are the history: uq_routine_published
- * keeps at most one PUBLISHED per member, which is the routine in force.
- *
- * memberId and trainerId are plain Longs because Member and Trainer belong to directory
- * and the isolation rule forbids navigating there through JPA. The exercises are this
- * module's own table, so they travel as a real @OneToMany with orphan removal.
- */
 @Entity
 @Getter
 @Setter

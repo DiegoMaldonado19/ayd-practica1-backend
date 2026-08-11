@@ -23,9 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 
 /**
- * The escalation queue: "el entrenador notifica al administrador si un socio requiere
- * reasignación o atención especial" (Enunciado). The alert row is the notification -
- * the administrator polls the queue with GET /trainer-alerts.
+ * el entrenador notifica al administrador si un socio requiere
+ * reasignación o atención especial
  */
 @Service
 @RequiredArgsConstructor
@@ -36,21 +35,25 @@ public class TrainerAlertService
     private final TrainerService           trainerService;
     private final TrainerAssignmentService trainerAssignmentService;
 
-    /** "Cola de alertas. Filtro: status" (§3.7). ADMIN sees all; a trainer only their own. */
     @Transactional(readOnly = true)
     public Page<TrainerAlertResponse> search(TrainerAlertStatus status, AuthenticatedUser principal, Pageable pageable)
     {
-        var trainerId = principal.role() == UserRole.TRAINER
-                ? trainerService.findTrainerIdByUser(principal) : null;
+        var trainerId = principal.role() == UserRole.TRAINER? trainerService.findTrainerIdByUser(principal) : null;
 
         return trainerAlertRepository.search(trainerId, status, pageable).map(TrainerAlertResponse::from);
     }
 
+    /**
+     * Crea una alerta en estado PENDING para un miembro del caseload del entrenador.
+     *
+     * @param request   datos de la alerta
+     * @param principal usuario autenticado (entrenador)
+     * @return `TrainerAlertResponse` creado
+     */
     public TrainerAlertResponse create(TrainerAlertRequest request, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);
 
-        // An escalation is about a member of the caller's caseload, like any other follow-up.
         if (!trainerAssignmentService.isAssignedTo(trainerId, request.memberId()))
         {
             throw new TrainerScopeException();
@@ -68,7 +71,14 @@ public class TrainerAlertService
         return TrainerAlertResponse.from(trainerAlertRepository.save(alert));
     }
 
-    /** "PATCH /trainer-alerts/{id}/status: resuelve o descarta la alerta" (§3.7). ADMIN only. */
+    /**
+     * Cambia el estado de una alerta pendiente (resolver o descartar). ADMIN only.
+     *
+     * @param alertId   id de la alerta
+     * @param request   nuevo estado y notas de resolución
+     * @param principal usuario autenticado
+     * @return `TrainerAlertResponse` con el estado actualizado
+     */
     public TrainerAlertResponse changeStatus(Long alertId, TrainerAlertStatusRequest request, AuthenticatedUser principal)
     {
         var alert = findOrFail(alertId);

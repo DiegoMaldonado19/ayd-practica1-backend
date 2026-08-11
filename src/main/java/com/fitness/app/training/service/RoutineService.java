@@ -28,16 +28,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * The member's personal routine: "crea y modifica rutinas personalizadas para los
- * socios que tiene asignados, indicando ejercicios, series, repeticiones y días de
- * entrenamiento sugeridos" (Enunciado).
- *
- * Three scopes share the module's rule: a member only their own routines, a trainer
- * only the members assigned to them, the administrator every routine. Reads with a
- * member in the path delegate the scope to MemberService.findById; the trainer-only
- * writes resolve the caller's trainerId from the token.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -52,6 +42,16 @@ public class RoutineService
     private final TrainerAssignmentService    trainerAssignmentService;
 
     @Transactional(readOnly = true)
+    /**
+     * Busca rutinas aplicando scope según el rol del usuario y los filtros proporcionados.
+     *
+     * @param memberId  filtro por socio (opcional)
+     * @param trainerId filtro por entrenador (opcional)
+     * @param status estado de la rutina (opcional)
+     * @param principal usuario autenticado
+     * @param pageable  paginación
+     * @return página de RoutineResponse
+     */
     public Page<RoutineResponse> search(Long memberId, Long trainerId, RoutineStatus status,
                                         AuthenticatedUser principal, Pageable pageable)
     {
@@ -60,7 +60,6 @@ public class RoutineService
 
         switch (principal.role())
         {
-            // The member's own history: their member_id, whatever filter was passed.
             case MEMBER ->
             {
                 var ownMemberId = memberService.findOwnMemberId(principal);
@@ -72,7 +71,6 @@ public class RoutineService
 
                 scopedMemberId = ownMemberId;
             }
-            // A trainer may filter by an assigned member, or see the routines they wrote.
             case TRAINER ->
             {
                 var selfTrainerId = trainerService.findTrainerIdByUser(principal);
@@ -92,17 +90,29 @@ public class RoutineService
     }
 
     @Transactional(readOnly = true)
+    /**
+     * Recupera una rutina por id y valida permisos según el socio asociado.
+     *
+     * @param routineId id de la rutina
+     * @param principal usuario autenticado
+     * @return `RoutineResponse` con los datos de la rutina
+     */
     public RoutineResponse findById(Long routineId, AuthenticatedUser principal)
     {
         var routine = findOrFail(routineId);
 
-        // MemberService.findById enforces the three scopes on the routine's member:
-        // ADMIN any, TRAINER assigned, MEMBER own file.
         memberService.findById(routine.getMemberId(), principal);
 
         return RoutineResponse.from(routine);
     }
 
+    /**
+     * Crea una nueva rutina (DRAFT) para un socio asignado y con el beneficio requerido.
+     *
+     * @param request   datos de la rutina
+     * @param principal usuario autenticado (entrenador)
+     * @return `RoutineResponse` creado
+     */
     public RoutineResponse create(RoutineRequest request, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);
@@ -112,8 +122,6 @@ public class RoutineService
             throw new TrainerScopeException();
         }
 
-        // A new training program is the Élite service itself, so the benefit is the
-        // gate here too - not just at assignment time (the plan could have changed).
         if (!membershipService.hasBenefit(request.memberId(), PlanBenefit.PERSONAL_TRAINER))
         {
             throw new BusinessException(ErrorCode.PLAN_BENEFIT_NOT_INCLUDED);
@@ -135,11 +143,12 @@ public class RoutineService
     }
 
     /**
-     * "PUT /routines/{id}: reemplaza la rutina y sus ejercicios" (§3.7). The routine
-     * keeps its member and trainer: it is a correction of the same plan.
+     * Reemplaza la rutina y sus ejercicios; mantiene miembro y entrenador.
      *
-     * uq_rtn_ex_order would make the orphan-removal diff collide (inserts before
-     * deletes), so the old rows are deleted and flushed first.
+     * @param routineId id de la rutina a reemplazar
+     * @param request   nueva definición de la rutina
+     * @param principal usuario autenticado (entrenador)
+     * @return `RoutineResponse` actualizado
      */
     public RoutineResponse update(Long routineId, RoutineRequest request, AuthenticatedUser principal)
     {
@@ -168,9 +177,12 @@ public class RoutineService
     }
 
     /**
-     * "PATCH /routines/{id}/status: publica o archiva la rutina" (§3.7). DRAFT as a
-     * destination makes no sense and is refused; PUBLISHED archives the routine that
-     * was in force so uq_routine_published never sees two.
+     * Cambia el estado de una rutina (PUBLISHED o ARCHIVED). Validaciones de transición incluidas.
+     *
+     * @param routineId id de la rutina
+     * @param request   petición con el nuevo estado
+     * @param principal usuario autenticado (entrenador)
+     * @return `RoutineResponse` con el estado actualizado
      */
     public RoutineResponse changeStatus(Long routineId, RoutineStatusRequest request, AuthenticatedUser principal)
     {
@@ -190,15 +202,18 @@ public class RoutineService
         return RoutineResponse.from(routine);
     }
 
+    /**
+     * Publica la rutina: archiva la publicada vigente (si existe) y marca ésta como PUBLISHED.
+     *
+     * @param routine rutina a publicar
+     */
     private void publish(Routine routine)
     {
         if (routine.getStatus() == RoutineStatus.PUBLISHED)
         {
-            return; // already in force: publishing again is a no-op, not an error.
+            return;
         }
 
-        // uq_routine_published: at most one PUBLISHED per member. The one in force is
-        // archived first and the flush makes the swap atomic against the index.
         routineRepository.findByMemberIdAndStatus(routine.getMemberId(), RoutineStatus.PUBLISHED)
                 .filter(current -> !current.getRoutineId().equals(routine.getRoutineId()))
                 .ifPresent(current -> current.setStatus(RoutineStatus.ARCHIVED));
@@ -207,7 +222,12 @@ public class RoutineService
         routine.setStatus(RoutineStatus.PUBLISHED);
     }
 
-    /** Only the trainer who authored the routine may edit or publish it. */
+    /**
+     * Verifica que el entrenador autenticado sea el autor de la rutina.
+     *
+     * @param routine   rutina a comprobar
+     * @param principal usuario autenticado
+     */
     private void assertAuthor(Routine routine, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);
@@ -218,6 +238,13 @@ public class RoutineService
         }
     }
 
+    /**
+     * Convierte el DTO de ejercicios a entidades `RoutineExercise` ligadas a la rutina.
+     *
+     * @param routine rutina padre
+     * @param request petición con la lista de ejercicios
+     * @return lista de entidades `RoutineExercise`
+     */
     private List<RoutineExercise> toExercises(Routine routine, RoutineRequest request)
     {
         return request.exercises().stream()

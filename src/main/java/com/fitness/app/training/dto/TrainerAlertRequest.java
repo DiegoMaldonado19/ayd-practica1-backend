@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** "POST /trainer-alerts: escala al administrador" (§3.7). The trainer is the caller. */
+/** POST /trainer-alerts: escala al administrador */
 public record TrainerAlertRequest(
     @NotNull
     @JsonProperty("member_id")

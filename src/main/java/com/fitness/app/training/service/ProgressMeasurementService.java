@@ -20,15 +20,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * "El entrenador registra mediciones periódicas (peso, medidas corporales como
- * cintura/brazo/pierna, y avance respecto al objetivo)... Cada medición debe quedar
- * con fecha, de modo que el socio y el entrenador puedan ver la evolución en el
- * tiempo" (Enunciado).
- *
- * Measurements are follow-up on a relationship that is already open, so the gate is
- * the assignment scope (the trainer's own file), not a fresh benefit check.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -40,16 +31,32 @@ public class ProgressMeasurementService
     private final TrainerAssignmentService      trainerAssignmentService;
 
     @Transactional(readOnly = true)
+    /**
+     * Recupera el historial de mediciones de un socio en un rango de fechas.
+     *
+     * @param memberId id del socio
+     * @param from fecha inicial (opcional)
+     * @param to fecha final (opcional)
+     * @param principal usuario autenticado
+     * @return lista de ProgressMeasurementResponse ordenadas ascendentemente
+     */
     public List<ProgressMeasurementResponse> findByMember(Long memberId, LocalDate from, LocalDate to,
                                                           AuthenticatedUser principal)
     {
-        // The three scopes: ADMIN any member, TRAINER only assigned, MEMBER own file.
         memberService.findById(memberId, principal);
 
         return progressMeasurementRepository.findByMemberAndRange(memberId, from, to)
                 .stream().map(ProgressMeasurementResponse::from).toList();
     }
 
+    /**
+     * Registra una nueva medición para un socio, validando duplicados y alcance.
+     *
+     * @param memberId  id del socio
+     * @param request   datos de la medición
+     * @param principal usuario autenticado (entrenador)
+     * @return ProgressMeasurementResponse creado
+     */
     public ProgressMeasurementResponse create(Long memberId, ProgressMeasurementRequest request,
                                               AuthenticatedUser principal)
     {
@@ -76,7 +83,7 @@ public class ProgressMeasurementService
         return ProgressMeasurementResponse.from(progressMeasurementRepository.save(measurement));
     }
 
-    /** "PUT /measurements/{id}: corrige una medición" (§3.7). Only the recording trainer. */
+    // CORRIGE UNA MEDICION MAL CAPTURADA
     public ProgressMeasurementResponse update(Long measurementId, ProgressMeasurementRequest request,
                                               AuthenticatedUser principal)
     {
@@ -84,7 +91,6 @@ public class ProgressMeasurementService
 
         assertOwner(measurement, principal);
 
-        // The correction may move the measurement to a date that already has one.
         if (progressMeasurementRepository.existsByMemberIdAndMeasuredOnAndProgressMeasurementIdNot(
                 measurement.getMemberId(), request.measuredOn(), measurementId))
         {
@@ -102,7 +108,6 @@ public class ProgressMeasurementService
         return ProgressMeasurementResponse.from(measurement);
     }
 
-    /** "DELETE /measurements/{id}: elimina una medición mal capturada" (§3.7). */
     public void delete(Long measurementId, AuthenticatedUser principal)
     {
         var measurement = findOrFail(measurementId);
@@ -111,7 +116,6 @@ public class ProgressMeasurementService
         progressMeasurementRepository.delete(measurement);
     }
 
-    /** The member must be in the caller's caseload; answers with the caller's trainerId. */
     private Long assertAssigned(Long memberId, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);
@@ -124,7 +128,6 @@ public class ProgressMeasurementService
         return trainerId;
     }
 
-    /** A trainer corrects or deletes only the measurements they recorded. */
     private void assertOwner(ProgressMeasurement measurement, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);

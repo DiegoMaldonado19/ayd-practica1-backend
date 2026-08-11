@@ -8,7 +8,6 @@ import jakarta.validation.constraints.Size;
 
 import java.time.DayOfWeek;
 
-/** One exercise of a routine: the exercise, the suggested day and the prescription. */
 public record RoutineExerciseItem(
     @NotNull
     @JsonProperty("exercise_id")

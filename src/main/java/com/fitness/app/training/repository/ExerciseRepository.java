@@ -12,17 +12,16 @@ public interface ExerciseRepository extends JpaRepository<Exercise, Long>
     boolean existsByCode(String code);
 
     /**
-     * "Catálogo. Filtros: muscle_group, search, active" (§3.7). search must never be
-     * null, only empty (PostgreSQL types an untyped null as bytea, like MemberRepository).
-     * ExerciseService does the normalization.
+     * Catálogo: busca ejercicios por grupo muscular, texto y estado.
+     * `search` nunca debe ser null (vacío permitido).
      */
     @Query("""
            SELECT e
-             FROM Exercise e
-            WHERE (:muscleGroup IS NULL OR e.muscleGroup = :muscleGroup)
-              AND (:active IS NULL OR e.active = :active)
-              AND (:search = '' OR LOWER(e.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                                 OR LOWER(e.code) LIKE LOWER(CONCAT('%', :search, '%')))
+         FROM Exercise e
+        WHERE e.muscleGroup = COALESCE(:muscleGroup, e.muscleGroup)
+          AND e.active = COALESCE(:active, e.active)
+          AND (:search = '' OR LOWER(e.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                             OR LOWER(e.code) LIKE LOWER(CONCAT('%', :search, '%')))
            """)
     Page<Exercise> search(MuscleGroup muscleGroup, Boolean active, String search, Pageable pageable);
 }

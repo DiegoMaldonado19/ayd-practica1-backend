@@ -30,6 +30,14 @@ public class MemberNoteController
     private final TrainerNoteService trainerNoteService;
 
     @GetMapping
+    /**
+     * Lista las notas dejadas por el entrenador para un socio, opcionalmente filtradas por tip
+     *
+     * @param memberId  id del socio
+     * @param noteType  tipo de nota (opcional)
+     * @param principal usuario autenticado que realiza la consulta
+     * @return lista de TrainerNoteResponse ordenadas por fecha descendente
+     */
     public List<TrainerNoteResponse> history(@PathVariable Long memberId,
                                              @RequestParam(name = "note_type", required = false) TrainerNoteType noteType,
                                              @AuthenticationPrincipal AuthenticatedUser principal)

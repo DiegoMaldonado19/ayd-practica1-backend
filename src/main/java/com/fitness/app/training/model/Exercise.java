@@ -10,11 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Catalog row the trainer picks from when building a routine. It is a table (and not
- * free text) so the same exercise is named identically across routines and can be
- * reported on (schema.sql).
- */
 @Entity
 @Getter
 @Setter

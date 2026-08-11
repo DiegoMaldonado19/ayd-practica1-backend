@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** The escalation queue of §3.7: the trainer raises, the administrator resolves/dismisses. */
 @RestController
 @RequestMapping("/api/v1/trainer-alerts")
 @RequiredArgsConstructor
@@ -32,6 +31,14 @@ public class TrainerAlertController
     private final TrainerAlertService trainerAlertService;
 
     @GetMapping
+    /**
+     * Lista la cola de alertas filtrando por estado Los entrenadores ven solo sus
+     *
+     * @param status    estado de la alerta (opcional)
+     * @param principal usuario autenticado que realiza la consulta
+     * @param pageable  paginación
+     * @return 
+     */
     public PagedModel<TrainerAlertResponse> list(@RequestParam(required = false) TrainerAlertStatus status,
                                                  @AuthenticationPrincipal AuthenticatedUser principal,
                                                  Pageable pageable)

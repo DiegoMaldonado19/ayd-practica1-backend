@@ -6,24 +6,23 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** Creates or corrects an exercise. active is not here: it is the baja lógica DELETE. */
 public record ExerciseRequest(
-    @NotBlank @Size(max = 30)
-    String            code,
+        @NotBlank @Size(max = 30)
+        String code,
 
-    @NotBlank @Size(max = 80)
-    String            name,
+        @NotBlank @Size(max = 80)
+        String name,
 
-    @NotNull
-    @JsonProperty("muscle_group")
-    MuscleGroup       muscleGroup,
+        @NotNull
+        @JsonProperty("muscle_group")
+        MuscleGroup muscleGroup,
 
-    @Size(max = 300)
-    String            description,
+        @Size(max = 300)
+        String description,
 
-    @Size(max = 255)
-    @JsonProperty("video_url")
-    String            videoUrl
-)
+        @Size(max = 255)
+        @JsonProperty("video_url")
+        String  videoUrl
+        )
 {
 }

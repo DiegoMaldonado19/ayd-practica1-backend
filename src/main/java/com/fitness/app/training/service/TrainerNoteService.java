@@ -18,10 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * "POST /members/{id}/notes: deja una observación o recomendación nutricional" (§3.7).
- * Notes are follow-up on an open relationship, so the gate is the assignment scope.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -33,15 +29,30 @@ public class TrainerNoteService
     private final TrainerAssignmentService trainerAssignmentService;
 
     @Transactional(readOnly = true)
+    /**
+     * Lista las notas de entrenador de un socio, filtrando por tipo si se indica.
+     *
+     * @param memberId  id del socio
+     * @param noteType  tipo de nota (opcional)
+     * @param principal usuario autenticado
+     * @return lista de `TrainerNoteResponse` ordenadas por fecha descendente
+     */
     public List<TrainerNoteResponse> findByMember(Long memberId, TrainerNoteType noteType, AuthenticatedUser principal)
     {
-        // The three scopes: ADMIN any member, TRAINER only assigned, MEMBER own file.
         memberService.findById(memberId, principal);
 
         return trainerNoteRepository.findByMember(memberId, noteType)
                 .stream().map(TrainerNoteResponse::from).toList();
     }
 
+    /**
+     * Crea una nota de entrenador para un socio del caseload.
+     *
+     * @param memberId  id del socio
+     * @param request   datos de la nota
+     * @param principal usuario autenticado (entrenador)
+     * @return `TrainerNoteResponse` creado
+     */
     public TrainerNoteResponse create(Long memberId, TrainerNoteRequest request, AuthenticatedUser principal)
     {
         var trainerId = trainerService.findTrainerIdByUser(principal);

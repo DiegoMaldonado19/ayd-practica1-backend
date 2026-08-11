@@ -11,16 +11,15 @@ import java.util.Optional;
 
 public interface RoutineRepository extends JpaRepository<Routine, Long>
 {
-    /** The routine in force for a member, for the uq_routine_published swap on publish. */
     Optional<Routine> findByMemberIdAndStatus(Long memberId, RoutineStatus status);
 
     /** "Listado e histórico de un socio. Filtros: member_id, trainer_id, status" (§3.7). */
     @Query("""
            SELECT r
-             FROM Routine r
-            WHERE (:memberId IS NULL OR r.memberId = :memberId)
-              AND (:trainerId IS NULL OR r.trainerId = :trainerId)
-              AND (:status IS NULL OR r.status = :status)
+            FROM Routine r
+            WHERE r.memberId = COALESCE(:memberId, r.memberId)
+              AND r.trainerId = COALESCE(:trainerId, r.trainerId)
+              AND r.status = COALESCE(:status, r.status)
            """)
     Page<Routine> search(Long memberId, Long trainerId, RoutineStatus status, Pageable pageable);
 }

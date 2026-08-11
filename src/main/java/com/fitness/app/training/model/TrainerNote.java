@@ -13,7 +13,6 @@ import lombok.Setter;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** Free-text follow-up the trainer leaves for the member, including nutritional advice. */
 @Entity
 @Getter
 @Setter

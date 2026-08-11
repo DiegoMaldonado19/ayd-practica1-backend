@@ -12,14 +12,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/**
- * Periodic body measurements taken by the trainer. The statement fixes the list of
- * measures, so they are columns; an attribute-value table would be no more normalized,
- * only harder to query and to chart (schema.sql).
- *
- * Each measurement is dated (uq_measure_date), which is what lets the member and the
- * trainer see the evolution over time.
- */
 @Entity
 @Getter
 @Setter

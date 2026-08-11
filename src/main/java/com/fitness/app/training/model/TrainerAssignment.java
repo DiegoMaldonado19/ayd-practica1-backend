@@ -13,18 +13,6 @@ import lombok.Setter;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/**
- * One stretch of the member-trainer relationship. A reassignment closes the open row
- * and opens another, which is how the statement's "transferir la cartera sin perder el
- * historial" is satisfied: nothing is overwritten.
- *
- * memberId, trainerId and assignedByUserId are plain Longs: Member and Trainer belong
- * to directory and AppUser to iam, and the isolation rule forbids navigating there
- * through JPA (02-Modulos §1).
- *
- * endDate and endReason are inseparable (ck_assign_closed): a row is open or closed,
- * never half of each.
- */
 @Entity
 @Getter
 @Setter
@@ -46,7 +34,6 @@ public class TrainerAssignment
     private Long                assignedByUserId;
     private Instant             createdAt;
 
-    /** Closes the stretch. Both columns move together or ck_assign_closed rejects the row. */
     public void close(LocalDate endDate, AssignmentEndReason endReason)
     {
         this.endDate    = endDate;

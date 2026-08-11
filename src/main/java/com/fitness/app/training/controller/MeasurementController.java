@@ -17,11 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Correction and deletion of a measurement. The route hangs from /measurements (not
- * /members/{id}) because the member is already fixed by the row: "PUT /measurements/{id}
- * y DELETE /measurements/{id} corrigen o eliminan la medición mal capturada" (§3.7).
- */
 @RestController
 @RequestMapping("/api/v1/measurements")
 @RequiredArgsConstructor
@@ -30,6 +25,15 @@ public class MeasurementController
     private final ProgressMeasurementService progressMeasurementService;
 
     @PutMapping("/{measurementId}")
+    /**
+     * Corrige una medición existente identificada por measurementId
+     * Solo el entrenador que registró la medición puede corregirla.
+     *
+     * @param measurementId id de la medición a corregir
+     * @param request  datos con la corrección
+     * @param principal usuario autenticado que realiza la acción
+     * @return la medición corregida
+     */
     public ProgressMeasurementResponse update(@PathVariable Long measurementId,
                                               @Valid @RequestBody ProgressMeasurementRequest request,
                                               @AuthenticationPrincipal AuthenticatedUser principal)

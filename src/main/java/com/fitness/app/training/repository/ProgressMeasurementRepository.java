@@ -9,20 +9,18 @@ import java.util.List;
 
 public interface ProgressMeasurementRepository extends JpaRepository<ProgressMeasurement, Long>
 {
-    /** uq_measure_date in Java: one measurement per member per date. */
     boolean existsByMemberIdAndMeasuredOn(Long memberId, LocalDate measuredOn);
 
-    /** The same guard for a correction: any date but the measurement being edited. */
     boolean existsByMemberIdAndMeasuredOnAndProgressMeasurementIdNot(Long memberId, LocalDate measuredOn,
                                                                     Long progressMeasurementId);
 
     /** "Base de la gráfica de evolución. Filtros: from, to" (§3.7): always oldest first. */
     @Query("""
            SELECT m
-             FROM ProgressMeasurement m
+              FROM ProgressMeasurement m
             WHERE m.memberId = :memberId
-              AND (:from IS NULL OR m.measuredOn >= :from)
-              AND (:to   IS NULL OR m.measuredOn <= :to)
+              AND m.measuredOn >= COALESCE(:from, m.measuredOn)
+              AND m.measuredOn <= COALESCE(:to,   m.measuredOn)
             ORDER BY m.measuredOn ASC
            """)
     List<ProgressMeasurement> findByMemberAndRange(Long memberId, LocalDate from, LocalDate to);

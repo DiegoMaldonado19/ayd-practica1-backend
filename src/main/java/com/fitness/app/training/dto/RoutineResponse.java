@@ -12,11 +12,6 @@ import com.fitness.app.training.model.Routine;
 import com.fitness.app.training.model.RoutineExercise;
 import com.fitness.app.training.model.RoutineStatus;
 
-/**
- * The routine with its exercises grouped by day (§3.7: "detalle con los ejercicios
- * agrupados por día"). The days come in the calendar order MONDAY..SUNDAY, not the
- * alphabetical order an ORDER BY on the column would give.
- */
 public record RoutineResponse(
     @JsonProperty("routine_id")
     Long                     routineId,

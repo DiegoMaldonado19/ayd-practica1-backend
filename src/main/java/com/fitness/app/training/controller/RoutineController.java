@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 
-/** The /routines routes of §3.7: create, list, detail, replace and publish/archive. */
 @RestController
 @RequestMapping("/api/v1/routines")
 @RequiredArgsConstructor
@@ -36,6 +35,17 @@ public class RoutineController
     private final RoutineService routineService;
 
     @GetMapping
+    /**
+     * Lista rutinas con filtros por miembro, entrenador y estado.
+     * El alcance de la búsqueda depende del rol del usuario autenticado.
+     *
+     * @param memberId  id del socio (opcional)
+     * @param trainerId id del entrenador (opcional)
+     * @param status    estado de la rutina (opcional)
+     * @param principal usuario autenticado que realiza la consulta
+     * @param pageable  paginación
+     * @return página de RoutineResponse que coinciden con los filtros
+     */
     public PagedModel<RoutineResponse> list(@RequestParam(name = "member_id", required = false) Long memberId,
                                             @RequestParam(name = "trainer_id", required = false) Long trainerId,
                                             @RequestParam(required = false) RoutineStatus status,
@@ -56,6 +66,13 @@ public class RoutineController
     }
 
     @GetMapping("/{routineId}")
+    /**
+     * Devuelve el detalle de una rutina por su id, validando permisos según el socio asociado.
+     *
+     * @param routineId id de la rutina
+     * @param principal usuario autenticado que realiza la consulta
+     * @return RoutineResponse con el detalle de la rutina
+     */
     public RoutineResponse detail(@PathVariable Long routineId,
                                   @AuthenticationPrincipal AuthenticatedUser principal)
     {
@@ -63,6 +80,15 @@ public class RoutineController
     }
 
     @PutMapping("/{routineId}")
+    /**
+     * Reemplaza completamente una rutina y sus ejercicios asociados.
+     * Solo el autor (entrenador) puede modificarla.
+     *
+     * @param routineId id de la rutina a reemplazar
+     * @param request   nueva definición de la rutina
+     * @param principal usuario autenticado que realiza la acción
+     * @return la rutina actualizada
+     */
     public RoutineResponse update(@PathVariable Long routineId,
                                   @Valid @RequestBody RoutineRequest request,
                                   @AuthenticationPrincipal AuthenticatedUser principal)
@@ -71,6 +97,15 @@ public class RoutineController
     }
 
     @PatchMapping("/{routineId}/status")
+    /**
+     * Cambia el estado de la rutina (p. ej. PUBLISHED o ARCHIVED).
+     * Las transiciones inválidas se rechazan.
+     *
+     * @param routineId id de la rutina
+     * @param request   nuevo estado solicitado
+     * @param principal usuario autenticado que realiza la acción
+     * @return la rutina con el estado actualizado
+     */
     public RoutineResponse changeStatus(@PathVariable Long routineId,
                                         @Valid @RequestBody RoutineStatusRequest request,
                                         @AuthenticationPrincipal AuthenticatedUser principal)

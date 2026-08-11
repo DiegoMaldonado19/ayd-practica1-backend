@@ -7,20 +7,20 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /** The exercise as the interface sees it. */
 public record ExerciseResponse(
     @JsonProperty("exercise_id")
-    Long             exerciseId,
+    Long exerciseId,
 
-    String           code,
-    String           name,
+    String code,
+    String name,
 
     @JsonProperty("muscle_group")
-    MuscleGroup      muscleGroup,
+    MuscleGroup muscleGroup,
 
-    String           description,
+    String description,
 
     @JsonProperty("video_url")
-    String           videoUrl,
+    String videoUrl,
 
-    boolean          active
+    boolean active
 )
 {
     public static ExerciseResponse from(Exercise exercise)

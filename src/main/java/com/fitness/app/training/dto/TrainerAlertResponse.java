@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;
 
-/** One escalation as the queue sees it. */
 public record TrainerAlertResponse(
     @JsonProperty("trainer_alert_id")
     Long               trainerAlertId,

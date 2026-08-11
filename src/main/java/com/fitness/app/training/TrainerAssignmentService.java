@@ -22,16 +22,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * The member-trainer relationship: the slice of training the two remaining Directory
- * endpoints of §3.2 need, and nothing else. Routines, exercises, measurements and
- * alerts arrive with their own module.
- *
- * Nothing here reads directory. The dependency matrix of 02-Modulos §3 points
- * directory to training to break their cycle, so the destination trainer's cap and
- * name travel in as parameters instead of being looked up: the caller already holds
- * the profile it validated.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -42,7 +32,6 @@ public class TrainerAssignmentService
     private final MembershipService           membershipService;
     private final NotificationService         notificationService;
 
-    /** The trainer in force for a member, for GET /members/{id}/trainer. */
     @Transactional(readOnly = true)
     public Long currentTrainerOf(Long memberId)
     {
@@ -51,13 +40,17 @@ public class TrainerAssignmentService
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_ASSIGNMENT_NOT_FOUND));
     }
 
-    /**
-     * "Listado y cartera de un entrenador. Filtros: member_id, trainer_id, active"
-     * (§3.7). "El entrenador solo puede filtrar por sí mismo": whatever filter a TRAINER
-     * passes, the search is scoped to their own trainerId; asking for another's is
-     * FORBIDDEN_RESOURCE. ADMIN sees the whole book.
-     */
     @Transactional(readOnly = true)
+    /**
+     * Busca asignaciones con filtros; si el usuario es TRAINER la búsqueda se limita a su id.
+     *
+     * @param memberId  filtro por socio (opcional)
+     * @param trainerId filtro por entrenador (opcional)
+     * @param active    true=open, false=history, null=ambos
+     * @param principal usuario autenticado
+     * @param pageable  paginación
+     * @return página de `TrainerAssignmentResponse`
+     */
     public Page<TrainerAssignmentResponse> search(Long memberId, Long trainerId, Boolean active,
                                                   AuthenticatedUser principal, Pageable pageable)
     {
@@ -80,27 +73,28 @@ public class TrainerAssignmentService
     }
 
 
-    /** "El entrenador solo ve a los suyos" (§3.2): the fact directory asks about. */
     @Transactional(readOnly = true)
+    /**
+     * Indica si un trainer está asignado actualmente a un socio.
+     *
+     * @param trainerId id del entrenador
+     * @param memberId  id del socio
+     * @return true si existe una asignación vigente
+     */
     public boolean isAssignedTo(Long trainerId, Long memberId)
     {
         return trainerAssignmentRepository.existsByTrainerIdAndMemberIdAndEndDateIsNull(trainerId, memberId);
     }
 
     /**
-     * Opens the relationship. Nothing else creates a trainer_assignment row, so
-     * without this the scope of §3.2 would leave every trainer with no file to read
-     * and there would never be a caseload to transfer.
+     * Abre una nueva asignación si el socio tiene el beneficio y el trainer tiene capacidad.
      *
-     * uq_assign_current is the rule being guarded: one open row per member. The cap
-     * is the destination's, and it travels in because training does not read
-     * directory.
-     *
-     * The plan is checked first because it is the eligibility gate: "el sistema debe
-     * validar, en cada intento de inscripción a una clase o de solicitud de entrenador,
-     * si el plan actual del socio incluye ese beneficio" (Enunciado). Only Élite
-     * carries PERSONAL_TRAINER, and PLAN_BENEFIT_NOT_INCLUDED already suggests
-     * UPGRADE_PLAN, which is the upgrade the same paragraph asks to offer.
+     * @param memberId         id del socio
+     * @param trainerId        id del entrenador destino
+     * @param maxMemberLoad    capacidad máxima del entrenador
+     * @param trainerName      nombre del entrenador (para notificación)
+     * @param assignedByUserId id del usuario que realiza la asignación
+     * @return `TrainerAssignmentResponse` creado
      */
     public TrainerAssignmentResponse assign(Long memberId, Long trainerId, short maxMemberLoad,
                                             String trainerName, Long assignedByUserId)
@@ -129,12 +123,15 @@ public class TrainerAssignmentService
     }
 
     /**
-     * "Transferir la cartera de un entrenador a otro sin perder el historial" (§3.2).
-     * Each member's open row is closed with TRAINER_LEFT and a fresh one is opened on
-     * the destination, so the previous stretch stays readable.
+     * Transfiere toda la cartera de `fromTrainerId` a `toTrainerId`, cerrando filas antiguas
+     * y abriendo nuevas. Valida capacidad del destino antes de mover.
      *
-     * The destination is validated as a whole before anything moves: a partial
-     * transfer would leave the caseload split between two trainers.
+     * @param fromTrainerId      id del entrenador origen
+     * @param toTrainerId        id del entrenador destino
+     * @param toTrainerMaxLoad   capacidad máxima del destino
+     * @param toTrainerName      nombre del entrenador destino (para notificar)
+     * @param assignedByUserId   id del usuario que realiza la transferencia
+     * @return lista de `TrainerAssignmentResponse` transferidas
      */
     public List<TrainerAssignmentResponse> transferCaseload(Long   fromTrainerId,
                                                             Long   toTrainerId,
@@ -159,9 +156,6 @@ public class TrainerAssignmentService
 
         caseload.forEach(assignment -> assignment.close(today, AssignmentEndReason.TRAINER_LEFT));
 
-        // uq_assign_current allows one open row per member, and Hibernate flushes
-        // inserts before updates: without this the new rows would hit the index while
-        // the old ones are still open.
         trainerAssignmentRepository.flush();
 
         var transferred = caseload.stream()
@@ -174,6 +168,9 @@ public class TrainerAssignmentService
         return transferred.stream().map(TrainerAssignmentResponse::from).toList();
     }
 
+    /**
+     * Crea una instancia `TrainerAssignment` inicializada (helper).
+     */
     private static TrainerAssignment open(Long memberId, Long trainerId, LocalDate today, Instant now, Long assignedByUserId)
     {
         var assignment = new TrainerAssignment();
@@ -188,8 +185,11 @@ public class TrainerAssignmentService
     }
 
     /**
-     * "DELETE /trainer-assignments/{id}: cierra la asignación vigente con su motivo"
-     * (§3.7). A closed row is closed: closing twice is INVALID_STATE_TRANSITION.
+     * Cierra una asignación vigente con el motivo indicado.
+     *
+     * @param assignmentId id de la asignación
+     * @param endReason    motivo de cierre
+     * @return `TrainerAssignmentResponse` actualizado
      */
     public TrainerAssignmentResponse closeAssignment(Long assignmentId, AssignmentEndReason endReason)
     {
@@ -207,15 +207,14 @@ public class TrainerAssignmentService
     }
 
     /**
-     * "POST /trainer-assignments: asigna entrenador a un socio... Cierra la asignación
-     * anterior si existía" (§3.7). Unlike assign (the §3.2 endpoint, which refuses a
-     * second trainer), this is the reassignment path: the previous stretch is closed
-     * with REASSIGNMENT and a fresh one is opened, so the history is kept - the same
-     * "sin perder el historial" rule as transferCaseload.
+     * Reasigna un socio a otro entrenador cerrando la anterior asignación y abriendo la nueva.
      *
-     * uq_assign_current requires the closing update to reach the database before the
-     * insert, hence the flush, exactly as in transferCaseload. Reassigning the same
-     * trainer is a no-op and refused, not a silent re-open.
+     * @param memberId         id del socio
+     * @param trainerId        id del entrenador destino
+     * @param maxMemberLoad    capacidad máxima del entrenador destino
+     * @param trainerName      nombre del entrenador destino
+     * @param assignedByUserId id del usuario que realiza la reasignación
+     * @return `TrainerAssignmentResponse` creado
      */
     public TrainerAssignmentResponse reassign(Long memberId, Long trainerId, short maxMemberLoad,
                                               String trainerName, Long assignedByUserId)

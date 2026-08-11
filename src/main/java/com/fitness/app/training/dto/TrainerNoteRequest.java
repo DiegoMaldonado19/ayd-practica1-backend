@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
-/** "El entrenador deja una observación o recomendación nutricional" (§3.7). */
+/** El entrenador deja una observación o recomendación nutricional */
 public record TrainerNoteRequest(
     @NotNull
     @JsonProperty("note_type")

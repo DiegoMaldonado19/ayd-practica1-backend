@@ -10,11 +10,6 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/**
- * Registers or corrects a dated measurement. The bounds mirror the schema checks
- * (ck_measure_*): weight and the circumferences are NUMERIC(5,2) > 0, the body fat is
- * NUMERIC(4,2) between 0 and 100. The member is the one in the path.
- */
 public record ProgressMeasurementRequest(
     @NotNull
     @JsonProperty("measured_on")

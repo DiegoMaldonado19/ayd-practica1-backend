@@ -626,7 +626,32 @@
       "value": "",
       "type": "string",
       "description": "Pago del pase de invitado (concept=GUEST_PASS)."
-    }
+    },
+    
+    { 
+      "key": "member1_username",
+      "value": "socio1",
+      "type": "string" 
+    },
+    { "key": "member1_password", "value": "Socio123*", "type": "string" },
+    { "key": "trainer_username", "value": "konr", "type": "string" },
+    { "key": "trainer_password", "value": "Trainer123*", "type": "string" },
+    { "key": "member_person_id", "value": "", "type": "string", "description": "La llena Setup › Alta de socio." },
+    { "key": "trainer_person_id", "value": "", "type": "string", "description": "La llena Setup › Alta de empleado/trainer." },
+    { "key": "member_id", "value": "", "type": "string", "description": "member_id del socio de pruebas." },
+    { "key": "trainer_id", "value": "", "type": "string", "description": "trainer_id del entrenador de pruebas." },
+    { "key": "member_access_token", "value": "", "type": "string" },
+    { "key": "member_challenge_id", "value": "", "type": "string" },
+    { "key": "trainer_access_token", "value": "", "type": "string" },
+    { "key": "trainer_challenge_id", "value": "", "type": "string" },
+    { "key": "membership_plan_elite_id", "value": "3", "type": "string", "description": "id del Plan Élite en membership_plan (sembrado en data.sql)." },
+    { "key": "assignment_id", "value": "", "type": "string" },
+    { "key": "exercise_id", "value": "", "type": "string" },
+    { "key": "routine_id", "value": "", "type": "string" },
+    { "key": "measurement_id", "value": "", "type": "string" },
+    { "key": "note_id", "value": "", "type": "string" },
+    { "key": "alert_id", "value": "", "type": "string" }
+
   ],
   "item": [
     {
@@ -9287,6 +9312,401 @@
           "response": []
         }
       ]
+    },
+
+
+
+
+
+
+
+
+
+
+
+
+    {
+  "name": "Training",
+  "description": "Prepara un socio con Plan Élite y un entrenador con la asignación vigente, que es la precondición de todo `training`. Ejecutar de arriba a abajo una sola vez por base de datos limpia.",
+  "item": [
+    {
+      "name": "Alta de socio (setup)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Socio creado (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "if (body.person_id) pm.collectionVariables.set(\"member_person_id\", body.person_id);",
+              "if (body.member_id) pm.collectionVariables.set(\"member_id\", body.member_id);",
+              "else if (body.id) pm.collectionVariables.set(\"member_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"3234567890101\",\n    \"first_name\": \"{{member1_username}}\",\n    \"last_name\": \"López\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1995-04-12\",\n    \"email\": \"socio1@ex.com\",\n    \"phone\": \"7012-3456\",\n    \"address\": \"Zona 10\"\n  },\n  \"emergency_contact_name\": \"Carlos López\",\n  \"emergency_contact_phone\": \"5123-4567\",\n  \"notes\": \"\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/members",
+          "host": ["{{base_url}}"],
+          "path": ["members"]
+        },
+        "description": "**Rol: A R.** Crea `person` + `member` (sin cuenta todavía). Guarda `person_id` para **Crear cuenta del socio**."
+      },
+      "response": []
+    },
+    {
+      "name": "Alta de empleado/trainer (setup)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Empleado creado (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "if (body.person_id) pm.collectionVariables.set(\"trainer_person_id\", body.person_id);",
+              "if (body.trainer_id) pm.collectionVariables.set(\"trainer_id\", body.trainer_id);",
+              "else if (body.id) pm.collectionVariables.set(\"trainer_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"2234567890101\",\n    \"first_name\": \"korn\",\n    \"last_name\": \"play\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1990-01-20\",\n    \"email\": \"korn@ex.com\",\n    \"phone\": \"55550003\",\n    \"address\": \"5a avenida 10-20, zona 4\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-01-15\",\n  \"max_member_load\": 3,\n  \"bio\": \"Especialista en fuerza y acondicionamiento.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/employees",
+          "host": ["{{base_url}}"],
+          "path": ["employees"]
+        },
+        "description": "**Rol: A.** `position: TRAINER` hace que el backend cree también su fila en `trainer` con `max_member_load: 3`."
+      },
+      "response": []
+    },
+    {
+      "name": "Crear cuenta del socio",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person_id\": {{member_person_id}},\n  \"username\": \"{{member1_username}}\",\n  \"password\": \"{{member1_password}}\",\n  \"role\": \"MEMBER\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/users",
+          "host": ["{{base_url}}"],
+          "path": ["users"]
+        },
+        "description": "**Rol: A.** Nace con `two_factor_enabled = true` (DEFAULT de la columna): el primer login del socio responderá `202`."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Cuenta creada (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Crear cuenta del entrenador",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person_id\": {{trainer_person_id}},\n  \"username\": \"{{trainer_username}}\",\n  \"password\": \"{{trainer_password}}\",\n  \"role\": \"TRAINER\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/users",
+          "host": ["{{base_url}}"],
+          "path": ["users"]
+        },
+        "description": "**Rol: A.** Igual que la cuenta del socio: nace con doble factor activado."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Cuenta creada (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Login socio",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{member1_username}}\",\n  \"password\": \"{{member1_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Debe responder `202` porque la cuenta nació con doble factor activo. Copia el código del log (`docker logs fitness_backend | grep -i verification`) en la variable `verification_code` antes de correr **Verificar 2FA (socio)**."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200 con token o 202 con reto\", function () {",
+              "    pm.expect([200, 202]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "if (pm.response.code === 200) {",
+              "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+              "    pm.collectionVariables.set(\"member_challenge_id\", \"\");",
+              "} else {",
+              "    pm.collectionVariables.set(\"member_challenge_id\", body.challenge_id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Verificar 2FA (socio)",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"{{verification_code}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/challenges/{{member_challenge_id}}/verifications",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "challenges", "{{member_challenge_id}}", "verifications"]
+        },
+        "description": "Canjea el código de 6 dígitos por el `access_token` del socio."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.collectionVariables.get(\"member_challenge_id\")) {",
+              "    pm.test(\"Token emitido (200)\", function () {",
+              "        pm.response.to.have.status(200);",
+              "    });",
+              "    const body = pm.response.json();",
+              "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Login entrenador",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{trainer_username}}\",\n  \"password\": \"{{trainer_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Debe responder `202`. Copia el código del log en `verification_code` antes de **Verificar 2FA (entrenador)**."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200 con token o 202 con reto\", function () {",
+              "    pm.expect([200, 202]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "if (pm.response.code === 200) {",
+              "    pm.collectionVariables.set(\"trainer_access_token\", body.access_token);",
+              "    pm.collectionVariables.set(\"trainer_challenge_id\", \"\");",
+              "} else {",
+              "    pm.collectionVariables.set(\"trainer_challenge_id\", body.challenge_id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Verificar 2FA (entrenador)",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"{{verification_code}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/challenges/{{trainer_challenge_id}}/verifications",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "challenges", "{{trainer_challenge_id}}", "verifications"]
+        },
+        "description": "Canjea el código por el `access_token` del entrenador."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.collectionVariables.get(\"trainer_challenge_id\")) {",
+              "    pm.test(\"Token emitido (200)\", function () {",
+              "        pm.response.to.have.status(200);",
+              "    });",
+              "    const body = pm.response.json();",
+              "    pm.collectionVariables.set(\"trainer_access_token\", body.access_token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Contratar Plan Élite al socio",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"membership_plan_id\": {{membership_plan_elite_id}},\n  \"start_date\": \"2026-01-01\",\n  \"paid_price\": 499.99\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/memberships",
+          "host": ["{{base_url}}"],
+          "path": ["memberships"]
+        },
+        "description": "**Rol: A R.** El entrenador personal es beneficio Élite: sin esto, **Asignar entrenador** falla con `403 PLAN_BENEFIT_NOT_INCLUDED`."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Membresía contratada (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Asignar entrenador al socio",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{member_id}},\n  \"trainer_id\": {{trainer_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/trainer-assignments",
+          "host": ["{{base_url}}"],
+          "path": ["trainer-assignments"]
+        },
+        "description": "**Rol: A.** Valida plan Élite, especialidad y carga disponible. Cierra la asignación anterior si existía."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Asignación creada (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "if (body.assignment_id) pm.collectionVariables.set(\"assignment_id\", body.assignment_id);",
+              "else if (body.id) pm.collectionVariables.set(\"assignment_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "response": []
     }
+  ]
+}
+    
   ]
 }

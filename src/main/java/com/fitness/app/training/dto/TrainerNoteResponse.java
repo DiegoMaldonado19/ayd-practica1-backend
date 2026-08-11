@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** One follow-up note as the interface sees it. */
 public record TrainerNoteResponse(
     @JsonProperty("trainer_note_id")
     Long            trainerNoteId,

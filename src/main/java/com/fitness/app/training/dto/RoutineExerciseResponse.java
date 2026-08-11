@@ -3,7 +3,6 @@ package com.fitness.app.training.dto;
 import com.fitness.app.training.model.RoutineExercise;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-/** One routine_exercise as the interface sees it, with the catalog copy for the card. */
 public record RoutineExerciseResponse(
     @JsonProperty("routine_exercise_id")
     Long     routineExerciseId,
