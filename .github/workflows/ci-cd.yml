@@ -3,7 +3,7 @@ name: CI/CD Pipeline Backend
 on:
   workflow_dispatch:
   push:
-    branches: ["*"]
+    branches: ["**"]
   pull_request:
     branches: [main]
 
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   JAVA_VERSION: '25'
@@ -113,21 +113,31 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+          # Written here and copied over, instead of echoed inside the ssh command:
+          # a secret interpolated into the remote script breaks the deploy on a
+          # single quote, and on a backtick it runs whatever it contains.
+          {
+            printf 'POSTGRES_DB=%s\n'          "$POSTGRES_DB"
+            printf 'POSTGRES_USER=%s\n'        "$POSTGRES_USER"
+            printf 'POSTGRES_PASSWORD=%s\n'    "$POSTGRES_PASSWORD"
+            printf 'JWT_SECRET=%s\n'           "$JWT_SECRET"
+            printf 'CORS_ALLOWED_ORIGINS=%s\n' "$CORS_ALLOWED_ORIGINS"
+            printf 'MAIL_USERNAME=%s\n'        "$MAIL_USERNAME"
+            printf 'MAIL_PASSWORD=%s\n'        "$MAIL_PASSWORD"
+          } > env.deploy
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            env.deploy "$SERVER_USER@$SERVER_HOST:$REPO_PATH/.env"
+
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             "$SERVER_USER@$SERVER_HOST" "
-              set -euo pipefail
+              set -eu
               cd '$REPO_PATH'
               git pull origin main
-              {
-                echo 'POSTGRES_DB=$POSTGRES_DB'
-                echo 'POSTGRES_USER=$POSTGRES_USER'
-                echo 'POSTGRES_PASSWORD=$POSTGRES_PASSWORD'
-                echo 'JWT_SECRET=$JWT_SECRET'
-                echo 'CORS_ALLOWED_ORIGINS=$CORS_ALLOWED_ORIGINS'
-                echo 'MAIL_USERNAME=$MAIL_USERNAME'
-                echo 'MAIL_PASSWORD=$MAIL_PASSWORD'
-              } > .env
               docker compose pull
-              docker compose up -d --remove-orphans --wait
+              # --wait now means something: the app service has a healthcheck.
+              # 300s because a cold start compiles the whole tree before binding 8080.
+              docker compose up -d --remove-orphans --wait --wait-timeout 300
               docker image prune -f
             "
