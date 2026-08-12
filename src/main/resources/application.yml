@@ -74,3 +74,5 @@ gym:
     expiry-notice-days: 5
   nutrition:
     default-tolerance-percent: 10
+  billing:
+      receipt-series: A

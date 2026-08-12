@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * trimestre)".
  */
 @ConfigurationProperties(prefix = "gym")
-public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes, Membership membership)
+public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes, Membership membership, Nutrition nutrition)
 {
     /**
      * cycleDays is the window the limits are measured over - 90 days, the "trimestre"
@@ -45,6 +45,12 @@ public record GymProperties(Freeze freeze, GuestPass guestPass, Classes classes,
      * configuration and not a constant.
      */
     public record Membership(int expiryNoticeDays)
+    {
+    }
+
+    public record Billing(String receiptSeries) {}
+
+    public record Nutrition(int defaultTolerancePercent)
     {
     }
 }
