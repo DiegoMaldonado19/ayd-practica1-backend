@@ -1,5 +1,8 @@
 .git
 .github
+.gitignore
+.gitattributes
+Docs
 target
 .mvn
 mvnw
