@@ -68,7 +68,8 @@ class EnrollmentServiceTest
             new GymProperties.Freeze(15, 2, 90),
             new GymProperties.GuestPass(1),
             new GymProperties.Classes(2, 60),
-            new GymProperties.Membership(5));
+            new GymProperties.Membership(5),
+        new GymProperties.Nutrition(10));
 
     @InjectMocks private EnrollmentService enrollmentService;
 
