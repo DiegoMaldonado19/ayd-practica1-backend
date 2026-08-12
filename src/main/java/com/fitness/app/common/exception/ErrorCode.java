@@ -63,12 +63,23 @@ public enum ErrorCode
     MEAL_EDIT_WINDOW_CLOSED       (HttpStatus.CONFLICT,            null,                      "Solo puedes editar comidas registradas el mismo día."),
     MEASUREMENT_DUPLICATE_DATE    (HttpStatus.CONFLICT,            null,                      "Ya existe una medición de este socio en esa fecha."),
     FOOD_IN_USE                   (HttpStatus.CONFLICT,            "DEACTIVATE_INSTEAD",      "El alimento ya se usó en comidas registradas."),
-
+    INVALID_ROUTINE_STATUS_TRANSITION(HttpStatus.CONFLICT,         null,                      "El cambio de estado de la rutina no está permitido."),
+    TRAINER_ALERT_ALREADY_CLOSED  (HttpStatus.CONFLICT,            null,                      "La alerta ya fue resuelta o descartada."),
     // --- Billing --------------------------------------------------------------
     PROMOTION_NOT_APPLICABLE      (HttpStatus.CONFLICT,            null,                      "La promoción está vencida, inactiva o no aplica a este plan."),
     PROMOTION_USES_EXCEEDED       (HttpStatus.CONFLICT,            null,                      "Se agotaron los usos de la promoción."),
     PAYMENT_ALREADY_CONFIRMED     (HttpStatus.CONFLICT,            null,                      "El pago ya fue confirmado."),
     PAYMENT_ALREADY_VOIDED        (HttpStatus.CONFLICT,            null,                      "El pago ya fue anulado."),
+    // nuevos agregados en modulo de billing
+    PROMOTION_NOT_FOUND(HttpStatus.NOT_FOUND, null, "La promoción indicada no existe."),
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, null, "El pago indicado no existe."),
+    PAYMENT_CONCEPT_NOT_SUPPORTED(HttpStatus.CONFLICT, null, "Los pagos de pase de invitado aún no están soportados por este módulo."),
+    PAYMENT_RECEIPT_NOT_AVAILABLE(HttpStatus.CONFLICT, "CONFIRM_PAYMENT", "El pago aún no ha sido confirmado, por lo que no tiene comprobante."),
+
+    GUEST_PASS_NOT_FOUND                (HttpStatus.NOT_FOUND,     null,                      "El pase de invitado indicado no existe."),
+    GUEST_PASS_NOT_CHARGEABLE           (HttpStatus.CONFLICT,      null,                      "Solo los pases de día pagados (PAID_DAY_PASS) pueden cobrarse."),
+    PAYMENT_ALREADY_REGISTERED_FOR_PASS (HttpStatus.CONFLICT,      null,                      "El pase de invitado ya tiene un pago registrado."),
+
 
     // --- Not found ------------------------------------------------------------
     // One per entity that already exists in code. Each module adds its own.
@@ -88,6 +99,11 @@ public enum ErrorCode
     WAITLIST_ENTRY_NOT_FOUND      (HttpStatus.NOT_FOUND,           null,                      "La entrada en la lista de espera no existe."),
     NOTIFICATION_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "El aviso no existe."),
     TRAINER_ASSIGNMENT_NOT_FOUND  (HttpStatus.NOT_FOUND,           null,                      "El socio no tiene un entrenador asignado."),
+    EXERCISE_NOT_FOUND            (HttpStatus.NOT_FOUND,           null,                      "El ejercicio no existe."),
+    ROUTINE_NOT_FOUND             (HttpStatus.NOT_FOUND,           null,                      "La rutina no existe."),
+    MEASUREMENT_NOT_FOUND         (HttpStatus.NOT_FOUND,           null,                      "La medición no existe."),
+    TRAINER_NOTE_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "La observación no existe."),
+    TRAINER_ALERT_NOT_FOUND       (HttpStatus.NOT_FOUND,           null,                      "La alerta no existe."),
 
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),

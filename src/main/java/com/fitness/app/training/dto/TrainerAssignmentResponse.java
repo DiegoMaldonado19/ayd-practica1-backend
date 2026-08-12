@@ -6,7 +6,6 @@ import com.fitness.app.training.model.TrainerAssignment;
 
 import java.time.LocalDate;
 
-/** One stretch of the member-trainer relationship as the interface sees it. */
 public record TrainerAssignmentResponse(
     @JsonProperty("trainer_assignment_id")
     Long                trainerAssignmentId,

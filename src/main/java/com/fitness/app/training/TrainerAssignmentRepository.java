@@ -3,6 +3,8 @@ package com.fitness.app.training;
 import com.fitness.app.training.model.TrainerAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,20 @@ public interface TrainerAssignmentRepository extends JpaRepository<TrainerAssign
     boolean existsByTrainerIdAndMemberIdAndEndDateIsNull(Long trainerId, Long memberId);
 
     /**
+     * "Listado y cartera de un entrenador. Filtros: member_id, trainer_id, active" (§3.7).
+     * active=TRUE -> open rows (end_date IS NULL); active=FALSE -> the history. A null
+     * Boolean means no filter, so the ternary plays both roles in one predicate.
+     */
+    @Query("""
+           SELECT a
+             FROM TrainerAssignment a
+            WHERE (:memberId IS NULL OR a.memberId = :memberId)
+              AND (:trainerId IS NULL OR a.trainerId = :trainerId)
+              AND (:active IS NULL OR (:active = TRUE AND a.endDate IS NULL)
+                                     OR (:active = FALSE AND a.endDate IS NOT NULL))
+           """)
+    Page<TrainerAssignment> search(Long memberId, Long trainerId, Boolean active, Pageable pageable);
+    /*
      * Caseload by trainer for all trainers. Returns List<Object[]> with [trainerId, count].
      */
     @Query("""
@@ -33,4 +49,5 @@ public interface TrainerAssignmentRepository extends JpaRepository<TrainerAssign
             GROUP BY ta.trainerId
            """)
     List<Object[]> caseloadByTrainer();
+
 }
