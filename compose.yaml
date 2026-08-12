@@ -22,7 +22,7 @@ services:
       retries: 5
 
   app:
-    image: maven:3.9-eclipse-temurin-25
+    image: djmaldonado19/fitness-app-backend:latest
     container_name: fitness_backend
     restart: unless-stopped
     working_dir: /app
@@ -54,6 +54,17 @@ services:
       - maven_repo:/root/.m2
       # Named volume so container builds never drop root-owned artifacts on the host tree.
       - build_output:/app/target
+    healthcheck:
+      # Without this, `up --wait` only waits for the container to be running, so a
+      # deploy reports success while Spring crash-loops behind restart: unless-stopped.
+      # bash explicitly: /bin/sh is dash here and has no /dev/tcp. The port only
+      # opens once Tomcat finishes binding, so the connect alone is the signal.
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # First run compiles from scratch before the port ever opens.
+      start_period: 180s
 
 volumes:
   postgres_data:
