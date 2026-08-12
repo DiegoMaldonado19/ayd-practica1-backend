@@ -27,10 +27,6 @@ import java.util.List;
 /**
  * The /trainers routes. Reading is open to every role so a member can choose a
  * trainer; writing belongs to the administrator (SecurityConfig).
- *
- * The has_capacity filter of §3.2 #14 is missing on purpose: capacity is the
- * current caseload against the cap, and the caseload is counted over
- * trainer_assignment, a table of training.
  */
 @RestController
 @RequestMapping("/api/v1/trainers")
@@ -42,9 +38,10 @@ public class TrainerController
 
     @GetMapping
     public PagedModel<TrainerResponse> list(@RequestParam(required = false) Specialty specialty,
-                                            Pageable                                  pageable)
+                                            @RequestParam(name = "has_capacity", required = false) Boolean hasCapacity,
+                                            Pageable                                                 pageable)
     {
-        return new PagedModel<>(trainerService.search(specialty, pageable));
+        return new PagedModel<>(trainerService.search(specialty, hasCapacity, pageable));
     }
 
     @GetMapping("/{trainerId}")

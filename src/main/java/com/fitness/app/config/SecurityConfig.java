@@ -171,19 +171,21 @@ public class SecurityConfig
                     // notification. The inbox is the caller's own, so the rule is the
                     // token and nothing else: the scope lives in NotificationService.
                     .requestMatchers("/api/v1/notifications/**").authenticated()
-                // GET /payments/{id}/receipt y GET /payments/{id} van ANTES del genérico GET /payments/*
-                .requestMatchers(HttpMethod.GET,   "/api/v1/payments/*/receipt").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
-                .requestMatchers(HttpMethod.POST,  "/api/v1/payments/*/confirmations").hasAnyRole("ADMIN", "RECEPTIONIST")
-                .requestMatchers(HttpMethod.POST,  "/api/v1/payments/*/voids").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET,   "/api/v1/payments/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
-                .requestMatchers(HttpMethod.GET,   "/api/v1/payments").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
-                .requestMatchers(HttpMethod.POST,  "/api/v1/payments").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    // GET /payments/{id}/receipt y GET /payments/{id} van ANTES del genérico GET /payments/*
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/payments/*/receipt").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/payments/*/confirmations").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/payments/*/voids").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/payments/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/payments").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/payments").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/promotions/*/status").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/promotions/*").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/promotions/*").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/promotions").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/promotions").hasRole("ADMIN")
+                    // report. All endpoints read-only, admin-only (role A).
+                    .requestMatchers("/api/v1/reports/**").hasRole("ADMIN")
 
-                .requestMatchers(HttpMethod.PATCH, "/api/v1/promotions/*/status").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT,   "/api/v1/promotions/*").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET,   "/api/v1/promotions/*").hasAnyRole("ADMIN", "RECEPTIONIST")
-                .requestMatchers(HttpMethod.GET,   "/api/v1/promotions").hasAnyRole("ADMIN", "RECEPTIONIST")
-                .requestMatchers(HttpMethod.POST,  "/api/v1/promotions").hasRole("ADMIN")
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->

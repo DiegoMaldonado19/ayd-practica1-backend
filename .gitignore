@@ -56,4 +56,6 @@ Thumbs.db
 
 # Maven Wrapper
 !.mvn/wrapper/maven-wrapper.jar
-instructiones_oc/
+# API validation runner deps (scripts/validate-api.js)
+scripts/
+

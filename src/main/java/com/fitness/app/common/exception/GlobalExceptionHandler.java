@@ -9,8 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
@@ -67,6 +69,27 @@ public class GlobalExceptionHandler
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR, request.getRequestURI(),
                                        "El cuerpo de la solicitud no es un JSON válido."));
+    }
+
+    /**
+     * A query parameter that is missing or cannot be converted to the type the
+     * handler declares -a date that is not a date, an enum constant that does not
+     * exist-. Bean Validation never sees these, so without this handler they fell
+     * into handleUnexpected and answered 500 to what is a client mistake.
+     */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidParameter(Exception ex, HttpServletRequest request)
+    {
+        var parameterName = ex instanceof MethodArgumentTypeMismatchException mismatch
+                ? mismatch.getName()
+                : ((MissingServletRequestParameterException) ex).getParameterName();
+
+        log.warn("errorCode={} method={} path={} parameter={}",
+                 ErrorCode.VALIDATION_ERROR, request.getMethod(), request.getRequestURI(), parameterName, ex);
+
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.validation(request.getRequestURI(),
+                                               Map.of(parameterName, "El valor del parámetro no es válido.")));
     }
 
     /** Unknown route: without this it would fall into handleUnexpected and answer 500. */

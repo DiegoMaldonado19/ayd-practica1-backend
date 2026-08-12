@@ -39,4 +39,15 @@ public interface TrainerAssignmentRepository extends JpaRepository<TrainerAssign
                                      OR (:active = FALSE AND a.endDate IS NOT NULL))
            """)
     Page<TrainerAssignment> search(Long memberId, Long trainerId, Boolean active, Pageable pageable);
+    /*
+     * Caseload by trainer for all trainers. Returns List<Object[]> with [trainerId, count].
+     */
+    @Query("""
+           SELECT ta.trainerId, COUNT(ta.trainerAssignmentId)
+             FROM TrainerAssignment ta
+            WHERE ta.endDate IS NULL
+            GROUP BY ta.trainerId
+           """)
+    List<Object[]> caseloadByTrainer();
+
 }
