@@ -104,7 +104,9 @@ public enum ErrorCode
     MEASUREMENT_NOT_FOUND         (HttpStatus.NOT_FOUND,           null,                      "La medición no existe."),
     TRAINER_NOTE_NOT_FOUND        (HttpStatus.NOT_FOUND,           null,                      "La observación no existe."),
     TRAINER_ALERT_NOT_FOUND       (HttpStatus.NOT_FOUND,           null,                      "La alerta no existe."),
-
+    FOOD_NOT_FOUND                (HttpStatus.NOT_FOUND,           null,                      "El alimento no existe."),
+    MEAL_NOT_FOUND                (HttpStatus.NOT_FOUND,           null,                      "La comida no existe."),
+    NUTRITION_GOAL_NOT_FOUND      (HttpStatus.NOT_FOUND, null, "El objetivo nutricional no existe."),    
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),
     INTERNAL_ERROR                (HttpStatus.INTERNAL_SERVER_ERROR, null,                    "Ocurrió un error inesperado. Reporta el identificador de traza.");

@@ -711,7 +711,24 @@
     { "key": "routine_id", "value": "", "type": "string" },
     { "key": "measurement_id", "value": "", "type": "string" },
     { "key": "note_id", "value": "", "type": "string" },
-    { "key": "alert_id", "value": "", "type": "string" }
+    { "key": "alert_id", "value": "", "type": "string" },
+
+    { "key": "member_access_token", "value": "", "type": "string", "description": "La llena Nutrition · Setup con el login del socio." },
+    { "key": "member_challenge_id", "value": "", "type": "string" },
+    { "key": "trainer_access_token", "value": "", "type": "string", "description": "La llena Nutrition · Setup con el login del entrenador." },
+    { "key": "trainer_challenge_id", "value": "", "type": "string" },
+    { "key": "member1_username", "value": "mariana.castillo", "type": "string" },
+    { "key": "member1_password", "value": "Socio123*", "type": "string" },
+    { "key": "trainer_username", "value": "luis.ramos.nutri", "type": "string" },
+    { "key": "trainer_password", "value": "Trainer123*", "type": "string" },
+    { "key": "nutrition_member_id", "value": "", "type": "string", "description": "member_id del socio de pruebas de nutrición." },
+    { "key": "nutrition_trainer_id", "value": "", "type": "string", "description": "trainer_id del entrenador de pruebas de nutrición." },
+    { "key": "membership_plan_elite_id_nutrition", "value": "1", "type": "string", "description": "Según el comentario del .http, en esta base el plan 1 es ÉLITE (difiere del 3 usado en training.http: verifícalo contra tu data.sql)." },
+    { "key": "food_pechuga_id", "value": "", "type": "string" },
+    { "key": "food_arroz_id", "value": "", "type": "string" },
+    { "key": "food_aguacate_id", "value": "", "type": "string" },
+    { "key": "meal_breakfast_id", "value": "", "type": "string" },
+    { "key": "meal_lunch_id", "value": "", "type": "string" }
 
   ],
   "item": [
@@ -13773,6 +13790,969 @@
       "response": []
     }
   ]
+},
+
+
+  {
+  "name": "Nutrition · Setup",
+  "description": "Crea un socio Plan Élite y un entrenador con esa asignación, precondición de todo `nutrition`. Aquí usamos el backend actual: `POST /members` y `POST /employees` crean persona + expediente/empleado, y las cuentas se crean después con `POST /users`.",
+  "item": [
+    {
+      "name": "Alta de socio (crea persona + expediente)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Socio creado (201)\", function () { pm.response.to.have.status(201); });",
+              "",
+              "const body = pm.response.json();",
+              "if (body.person_id) pm.collectionVariables.set(\"member_person_id\", body.person_id);",
+              "if (body.member_id) pm.collectionVariables.set(\"nutrition_member_id\", body.member_id);",
+              "else if (body.id) pm.collectionVariables.set(\"nutrition_member_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"3123456789\",\n    \"first_name\": \"Mariana\",\n    \"last_name\": \"Castillo\",\n    \"gender\": \"F\",\n    \"birth_date\": \"1996-05-18\",\n    \"email\": \"mariana.castillo@fitnessapp.local\",\n    \"phone\": \"55550303\",\n    \"address\": \"Zona 10\"\n  },\n  \"emergency_contact_name\": \"Carlos Castillo\",\n  \"emergency_contact_phone\": \"5123-4567\",\n  \"notes\": \"Socio para pruebas de nutrición.\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/members", "host": ["{{base_url}}"], "path": ["members"] },
+        "description": "**Rol: A R.** Crea persona y expediente; la cuenta de acceso se crea después con POST /users."
+      },
+      "response": []
+    },
+    {
+      "name": "Alta de empleado/trainer (crea persona + empleado + trainer)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Empleado creado (201)\", function () { pm.response.to.have.status(201); });",
+              "",
+              "const body = pm.response.json();",
+              "if (body.person_id) pm.collectionVariables.set(\"trainer_person_id\", body.person_id);",
+              "if (body.trainer_id) pm.collectionVariables.set(\"nutrition_trainer_id\", body.trainer_id);",
+              "else if (body.id) pm.collectionVariables.set(\"nutrition_trainer_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person\": {\n    \"document_type\": \"DPI\",\n    \"document_number\": \"3234567890\",\n    \"first_name\": \"Luis\",\n    \"last_name\": \"Ramos\",\n    \"gender\": \"M\",\n    \"birth_date\": \"1990-01-20\",\n    \"email\": \"luis.ramos.nutri@fitnessapp.local\",\n    \"phone\": \"55550404\",\n    \"address\": \"Zona 4\"\n  },\n  \"position\": \"TRAINER\",\n  \"hired_on\": \"2026-01-15\",\n  \"max_member_load\": 10,\n  \"bio\": \"Nutrición deportiva\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/employees", "host": ["{{base_url}}"], "path": ["employees"] },
+        "description": "**Rol: A.** `position: TRAINER` hace que el backend cree también la fila de trainer; la cuenta se crea después con POST /users."
+      },
+      "response": []
+    },
+    {
+      "name": "Crear cuenta del socio",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Cuenta creada (201)\", function () { pm.response.to.have.status(201); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person_id\": {{member_person_id}},\n  \"username\": \"{{member1_username}}\",\n  \"password\": \"{{member1_password}}\",\n  \"role\": \"MEMBER\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] },
+        "description": "**Rol: A.** Crea la cuenta de acceso del socio sobre la persona registrada previamente."
+      },
+      "response": []
+    },
+    {
+      "name": "Crear cuenta del entrenador",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Cuenta creada (201)\", function () { pm.response.to.have.status(201); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"person_id\": {{trainer_person_id}},\n  \"username\": \"{{trainer_username}}\",\n  \"password\": \"{{trainer_password}}\",\n  \"role\": \"TRAINER\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/users", "host": ["{{base_url}}"], "path": ["users"] },
+        "description": "**Rol: A.** Crea la cuenta de acceso del entrenador sobre la persona registrada previamente."
+      },
+      "response": []
+    },
+    {
+      "name": "Login socio",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{member1_username}}\",\n  \"password\": \"{{member1_password}}\"\n}" },
+        "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+        "description": "Si responde `202`, copia el código del log (`docker logs fitness_backend | grep -i verification`) en `verification_code` antes de **Verificar 2FA (socio)**."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 o 202\", function () { pm.expect([200, 202]).to.include(pm.response.code); });",
+          "const body = pm.response.json();",
+          "if (pm.response.code === 200) {",
+          "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+          "    pm.collectionVariables.set(\"member_challenge_id\", \"\");",
+          "} else {",
+          "    pm.collectionVariables.set(\"member_challenge_id\", body.challenge_id);",
+          "}"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Verificar 2FA (socio)",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{verification_code}}\"\n}" },
+        "url": {
+          "raw": "{{base_url}}/auth/challenges/{{member_challenge_id}}/verifications",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "challenges", "{{member_challenge_id}}", "verifications"]
+        },
+        "description": "Se omite sola si `member_challenge_id` quedó vacío (login sin 2FA)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "if (pm.collectionVariables.get(\"member_challenge_id\")) {",
+          "    pm.test(\"Token emitido (200)\", function () { pm.response.to.have.status(200); });",
+          "    const body = pm.response.json();",
+          "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+          "}"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Login entrenador",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{trainer_username}}\",\n  \"password\": \"{{trainer_password}}\"\n}" },
+        "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+        "description": "Copia el código del log en `verification_code` antes de **Verificar 2FA (entrenador)** si responde `202`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 o 202\", function () { pm.expect([200, 202]).to.include(pm.response.code); });",
+          "const body = pm.response.json();",
+          "if (pm.response.code === 200) {",
+          "    pm.collectionVariables.set(\"trainer_access_token\", body.access_token);",
+          "    pm.collectionVariables.set(\"trainer_challenge_id\", \"\");",
+          "} else {",
+          "    pm.collectionVariables.set(\"trainer_challenge_id\", body.challenge_id);",
+          "}"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Verificar 2FA (entrenador)",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{verification_code}}\"\n}" },
+        "url": {
+          "raw": "{{base_url}}/auth/challenges/{{trainer_challenge_id}}/verifications",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "challenges", "{{trainer_challenge_id}}", "verifications"]
+        }
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "if (pm.collectionVariables.get(\"trainer_challenge_id\")) {",
+          "    pm.test(\"Token emitido (200)\", function () { pm.response.to.have.status(200); });",
+          "    const body = pm.response.json();",
+          "    pm.collectionVariables.set(\"trainer_access_token\", body.access_token);",
+          "}"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Contratar Plan Élite al socio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"membership_plan_id\": {{membership_plan_elite_id_nutrition}},\n  \"start_date\": \"2026-01-01\",\n  \"paid_price\": 499.99\n}"
+        },
+        "url": { "raw": "{{base_url}}/memberships", "host": ["{{base_url}}"], "path": ["memberships"] },
+        "description": "**Rol: A R.** El módulo de nutrición se bloquea si la membresía no está activa (§2 de `02-Modulos.md`), así que esto es precondición de toda la carpeta `Meals`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"Membresía contratada (201)\", function () { pm.response.to.have.status(201); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Asignar entrenador al socio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"trainer_id\": {{nutrition_trainer_id}}\n}"
+        },
+        "url": { "raw": "{{base_url}}/trainer-assignments", "host": ["{{base_url}}"], "path": ["trainer-assignments"] },
+        "description": "**Rol: A.** Sin esto, el entrenador no puede leer ni observar la nutrición del socio: cualquier intento responde `403 TRAINER_SCOPE_VIOLATION`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"Asignación creada (201)\", function () { pm.response.to.have.status(201); });"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+{
+  "name": "Foods",
+  "item": [
+    {
+      "name": "Crear alimento — pechuga",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"PECHUGA_300\",\n  \"name\": \"Pechuga de pollo a la plancha\",\n  \"category\": \"PROTEIN\",\n  \"serving_size\": 100.00,\n  \"serving_unit\": \"GRAM\",\n  \"calories\": 165.00,\n  \"protein_g\": 31.00,\n  \"carbohydrates_g\": 0.00,\n  \"fat_g\": 3.60\n}"
+        },
+        "url": { "raw": "{{base_url}}/foods", "host": ["{{base_url}}"], "path": ["foods"] },
+        "description": "**Rol: A.** `serving_size` + `serving_unit` es lo que habilita el cálculo proporcional (§6 de `04-Base-de-Datos.md`)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.food_id) pm.collectionVariables.set(\"food_pechuga_id\", body.food_id);",
+          "else if (body.id) pm.collectionVariables.set(\"food_pechuga_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Crear alimento — arroz",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"ARROZ_100\",\n  \"name\": \"Arroz blanco cocido\",\n  \"category\": \"CARBOHYDRATE\",\n  \"serving_size\": 100.00,\n  \"serving_unit\": \"GRAM\",\n  \"calories\": 130.00,\n  \"protein_g\": 2.70,\n  \"carbohydrates_g\": 28.20,\n  \"fat_g\": 0.30\n}"
+        },
+        "url": { "raw": "{{base_url}}/foods", "host": ["{{base_url}}"], "path": ["foods"] },
+        "description": "**Rol: A.** Se usa después en **Meals** — es el alimento que se marca \"en uso\" para el caso de error `FOOD_IN_USE`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.food_id) pm.collectionVariables.set(\"food_arroz_id\", body.food_id);",
+          "else if (body.id) pm.collectionVariables.set(\"food_arroz_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Crear alimento — aguacate",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"AGUACATE_100\",\n  \"name\": \"Aguacate\",\n  \"category\": \"FAT\",\n  \"serving_size\": 100.00,\n  \"serving_unit\": \"GRAM\",\n  \"calories\": 160.00,\n  \"protein_g\": 2.00,\n  \"carbohydrates_g\": 8.50,\n  \"fat_g\": 14.70\n}"
+        },
+        "url": { "raw": "{{base_url}}/foods", "host": ["{{base_url}}"], "path": ["foods"] },
+        "description": "**Rol: A.** Este es el que se desactiva más abajo, para probar `VALIDATION_ERROR` al registrar una comida con un alimento inactivo."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.food_id) pm.collectionVariables.set(\"food_aguacate_id\", body.food_id);",
+          "else if (body.id) pm.collectionVariables.set(\"food_aguacate_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar catálogo con filtros (search + active)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/foods?search=aguacate&active=false",
+          "host": ["{{base_url}}"],
+          "path": ["foods"],
+          "query": [
+            { "key": "search", "value": "aguacate" },
+            { "key": "active", "value": "false" }
+          ]
+        },
+        "description": "**Rol: A T S.** Con `active=false` debe devolver el aguacate aunque ya esté desactivado (útil para auditar el catálogo dado de baja)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Listar catálogo sin filtros (devuelve todos)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/foods", "host": ["{{base_url}}"], "path": ["foods"] },
+        "description": "**Rol: A T S.** Sin `search` ni `active`, la colección completa (por defecto solo los activos, según convención de `active`)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Detalle de alimento",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/foods/{{food_pechuga_id}}", "host": ["{{base_url}}"], "path": ["foods", "{{food_pechuga_id}}"] },
+        "description": "**Rol: A T S.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Corregir valores nutricionales",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"PECHUGA_100\",\n  \"name\": \"Pechuga de pollo a la plancha (corregida)\",\n  \"category\": \"PROTEIN\",\n  \"serving_size\": 100.00,\n  \"serving_unit\": \"GRAM\",\n  \"calories\": 165.00,\n  \"protein_g\": 31.00,\n  \"carbohydrates_g\": 0.00,\n  \"fat_g\": 3.60\n}"
+        },
+        "url": { "raw": "{{base_url}}/foods/{{food_pechuga_id}}", "host": ["{{base_url}}"], "path": ["foods", "{{food_pechuga_id}}"] },
+        "description": "**Rol: A.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Desactivar alimento (baja lógica)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/foods/{{food_aguacate_id}}", "host": ["{{base_url}}"], "path": ["foods", "{{food_aguacate_id}}"] },
+        "description": "**Rol: A.** No borra: `food` puede estar referenciada por `meal_item`. Deja al aguacate listo para el caso de error de **Meals** que registra una comida con un alimento inactivo."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"204 No Content\", function () { pm.response.to.have.status(204); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Editar alimento como entrenador (Error - FORBIDDEN_RESOURCE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"ARROZ_100\",\n  \"name\": \"No debería poder editar esto\",\n  \"category\": \"CARBOHYDRATE\",\n  \"serving_size\": 100.00,\n  \"serving_unit\": \"GRAM\",\n  \"calories\": 130.00,\n  \"protein_g\": 2.70,\n  \"carbohydrates_g\": 28.20,\n  \"fat_g\": 0.30\n}"
+        },
+        "url": { "raw": "{{base_url}}/foods/{{food_arroz_id}}", "host": ["{{base_url}}"], "path": ["foods", "{{food_arroz_id}}"] },
+        "description": "El catálogo lo mantiene únicamente el administrador (§3.8: `PUT /foods/{id}` es rol **A**).\n\n| `error_code` | HTTP |\n|---|---|\n| `FORBIDDEN_RESOURCE` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 FORBIDDEN_RESOURCE\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Desactivar alimento ya usado en comidas (Error - FOOD_IN_USE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/foods/{{food_arroz_id}}", "host": ["{{base_url}}"], "path": ["foods", "{{food_arroz_id}}"] },
+        "description": "**Precondición:** correr después de **Meals › Registrar almuerzo**, que usa el arroz en un `meal_item`. Borrar un alimento referenciado rompería el historial nutricional.\n\n| `error_code` | HTTP | `suggested_action` |\n|---|---|---|\n| `FOOD_IN_USE` | 409 | `DEACTIVATE_INSTEAD` |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"409 FOOD_IN_USE\", function () {",
+          "    pm.response.to.have.status(409);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FOOD_IN_USE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+{
+  "name": "Meals",
+  "item": [
+    {
+      "name": "Registrar desayuno",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"BREAKFAST\",\n  \"notes\": \"Desayuno pre-entreno\",\n  \"items\": [\n    { \"food_id\": {{food_arroz_id}}, \"quantity\": 150.00 },\n    { \"food_id\": {{food_aguacate_id}}, \"quantity\": 100.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "**Rol: S.** `member_id` es opcional para el socio (se infiere del token); se envía explícito para que el ejemplo sea reutilizable con otros roles de prueba."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.meal_id) pm.collectionVariables.set(\"meal_breakfast_id\", body.meal_id);",
+          "else if (body.id) pm.collectionVariables.set(\"meal_breakfast_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Registrar almuerzo",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"LUNCH\",\n  \"notes\": \"Comida post-entreno\",\n  \"items\": [\n    { \"food_id\": {{food_pechuga_id}}, \"quantity\": 150.00 },\n    { \"food_id\": {{food_arroz_id}}, \"quantity\": 200.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "**Rol: S.** Deja el arroz \"en uso\", precondición del caso de error `FOOD_IN_USE` de la carpeta **Foods**. `log_date` se mantiene igual al del desayuno para que el resumen diario tenga ambos tiempos."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"201 Created\", function () { pm.response.to.have.status(201); });",
+          "const body = pm.response.json();",
+          "if (body.meal_id) pm.collectionVariables.set(\"meal_lunch_id\", body.meal_id);",
+          "else if (body.id) pm.collectionVariables.set(\"meal_lunch_id\", body.id);"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Historial del socio (filtro date)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/meals?member_id={{nutrition_member_id}}&date=2026-08-11",
+          "host": ["{{base_url}}"],
+          "path": ["meals"],
+          "query": [
+            { "key": "member_id", "value": "{{nutrition_member_id}}" },
+            { "key": "date", "value": "2026-08-11" }
+          ]
+        },
+        "description": "**Rol: T S.** Debe devolver el desayuno y el almuerzo registrados arriba."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Detalle de una comida (entrenador asignado)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/meals/{{meal_lunch_id}}", "host": ["{{base_url}}"], "path": ["meals", "{{meal_lunch_id}}"] },
+        "description": "**Rol: T S.** Devuelve el aporte calculado de cada alimento (proporcional a la cantidad consumida vs. la porción de referencia)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Editar comida del día",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"meal_type\": \"BREAKFAST\",\n  \"notes\": \"Desayuno pre-entreno (ajustado)\",\n  \"items\": [\n    { \"food_id\": {{food_arroz_id}}, \"quantity\": 180.00 },\n    { \"food_id\": {{food_pechuga_id}}, \"quantity\": 120.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals/{{meal_breakfast_id}}", "host": ["{{base_url}}"], "path": ["meals", "{{meal_breakfast_id}}"] },
+        "description": "**Rol: S.** ⚠️ Solo funciona si `log_date` de esa comida es **hoy**: el `.http` original registró el desayuno con `2026-08-11` fijo, así que para probar este PUT con éxito hay que registrar una comida nueva con `log_date` = fecha actual antes de editarla. De lo contrario, cae en `409 MEAL_EDIT_WINDOW_CLOSED` (ver abajo)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK o 409 si la fecha ya no es hoy\", function () {",
+          "    pm.expect([200, 409]).to.include(pm.response.code);",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Eliminar comida del día",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "DELETE",
+        "url": { "raw": "{{base_url}}/meals/{{meal_lunch_id}}", "host": ["{{base_url}}"], "path": ["meals", "{{meal_lunch_id}}"] },
+        "description": "**Rol: S.** Misma condición que el PUT: solo el mismo día del registro."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"204 o 409 si la fecha ya no es hoy\", function () {",
+          "    pm.expect([204, 409]).to.include(pm.response.code);",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Registrar comida para otro socio (Error - FORBIDDEN_RESOURCE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": 1,\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"SNACK\",\n  \"items\": [\n    { \"food_id\": {{food_pechuga_id}}, \"quantity\": 50.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "Un socio solo puede registrar comidas para sí mismo, sin importar qué `member_id` envíe en el body.\n\n| `error_code` | HTTP |\n|---|---|\n| `FORBIDDEN_RESOURCE` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 FORBIDDEN_RESOURCE\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"FORBIDDEN_RESOURCE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Entrenador consulta comida de socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/meals/1", "host": ["{{base_url}}"], "path": ["meals", "1"] },
+        "description": "El entrenador solo puede ver el registro de alimentación de los socios que tiene asignados personalmente, nunca del resto (regla de visibilidad explícita del enunciado).\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Comida con alimento desactivado (Error - VALIDATION_ERROR)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"SNACK\",\n  \"items\": [\n    { \"food_id\": {{food_aguacate_id}}, \"quantity\": 50.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "**Precondición:** correr después de **Foods › Desactivar alimento**. El catálogo desactivado ya no puede seleccionarse para nuevas comidas.\n\n| `error_code` | HTTP |\n|---|---|\n| `VALIDATION_ERROR` | 400 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"400 VALIDATION_ERROR\", function () {",
+          "    pm.response.to.have.status(400);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Comida con alimento repetido (Error - VALIDATION_ERROR)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"SNACK\",\n  \"items\": [\n    { \"food_id\": {{food_arroz_id}}, \"quantity\": 100.00 },\n    { \"food_id\": {{food_arroz_id}}, \"quantity\": 100.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "Dos filas de `meal_item` con el mismo `food_id` en la misma comida deben rechazarse (se debe sumar la cantidad en una sola fila, no duplicar).\n\n| `error_code` | HTTP |\n|---|---|\n| `VALIDATION_ERROR` | 400 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"400 VALIDATION_ERROR\", function () {",
+          "    pm.response.to.have.status(400);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"VALIDATION_ERROR\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Editar comida de un día anterior (Error - MEAL_EDIT_WINDOW_CLOSED)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"meal_type\": \"DINNER\",\n  \"notes\": \"Intento de cambiar una comida de otro día\",\n  \"items\": [\n    { \"food_id\": {{food_pechuga_id}}, \"quantity\": 100.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals/{{meal_breakfast_id}}", "host": ["{{base_url}}"], "path": ["meals", "{{meal_breakfast_id}}"] },
+        "description": "**Precondición:** `meal_breakfast_id` debe apuntar a una comida con `log_date` distinto de hoy (el desayuno del setup usa `2026-08-11` fijo). Corre esto en cualquier fecha posterior a esa.\n\n| `error_code` | HTTP |\n|---|---|\n| `MEAL_EDIT_WINDOW_CLOSED` | 409 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"409 MEAL_EDIT_WINDOW_CLOSED\", function () {",
+          "    pm.response.to.have.status(409);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"MEAL_EDIT_WINDOW_CLOSED\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Registrar comida con membresía no activa (Error - MEMBERSHIP_NOT_ACTIVE)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"member_id\": {{nutrition_member_id}},\n  \"log_date\": \"2026-08-11\",\n  \"meal_type\": \"SNACK\",\n  \"items\": [\n    { \"food_id\": {{food_pechuga_id}}, \"quantity\": 50.00 }\n  ]\n}"
+        },
+        "url": { "raw": "{{base_url}}/meals", "host": ["{{base_url}}"], "path": ["meals"] },
+        "description": "**Precondición:** congela o cancela primero la membresía del socio con `POST /memberships/{id}/freezes` o `/cancellations` (módulo `membership`). El enunciado exige bloquear nutrición junto con check-in y clases mientras la membresía no esté activa.\n\n| `error_code` | HTTP | `suggested_action` |\n|---|---|---|\n| `MEMBERSHIP_NOT_ACTIVE` | 409 | `RENEW_MEMBERSHIP` |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"409 MEMBERSHIP_NOT_ACTIVE\", function () {",
+          "    pm.response.to.have.status(409);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"MEMBERSHIP_NOT_ACTIVE\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Nutrition Goal",
+  "item": [
+    {
+      "name": "Socio fija su meta (WEIGHT_LOSS)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"goal_type\": \"WEIGHT_LOSS\",\n  \"daily_calories\": 2000.00,\n  \"target_weight_kg\": 60.00\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "{{nutrition_member_id}}", "nutrition-goal"] },
+        "description": "**Rol: T S.** `uq_goal_current` garantiza una sola meta vigente por socio; las anteriores quedan como historial."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Consultar meta vigente (entrenador)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "{{nutrition_member_id}}", "nutrition-goal"] },
+        "description": "**Rol: T S.** Debe reflejar `defined_by: MEMBER`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Entrenador ajusta la meta (MUSCLE_GAIN, Plan Élite)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"goal_type\": \"MUSCLE_GAIN\",\n  \"daily_calories\": 2500.00,\n  \"tolerance_percent\": 10,\n  \"target_weight_kg\": 65.00\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "{{nutrition_member_id}}", "nutrition-goal"] },
+        "description": "**Rol: T.** Solo posible sobre socios Plan Élite asignados a este entrenador (`defined_by: TRAINER`). Cierra la meta anterior del socio."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Consultar meta vigente (socio, ve el ajuste del entrenador)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "{{nutrition_member_id}}", "nutrition-goal"] },
+        "description": "**Rol: T S.** Debe devolver la meta `MUSCLE_GAIN` fijada por el entrenador, con `defined_by: TRAINER`."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });",
+          "pm.test(\"defined_by es TRAINER\", function () {",
+          "    pm.expect(pm.response.json().defined_by).to.eql(\"TRAINER\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Entrenador ajusta meta de socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"goal_type\": \"MAINTENANCE\",\n  \"daily_calories\": 2200.00\n}"
+        },
+        "url": { "raw": "{{base_url}}/members/999999/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "999999", "nutrition-goal"] },
+        "description": "\"El socio la fija para sí; el entrenador solo para sus socios asignados\" (§3.8).\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Socio sin meta vigente (Error - NUTRITION_GOAL_NOT_FOUND)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-goal", "host": ["{{base_url}}"], "path": ["members", "{{nutrition_member_id}}", "nutrition-goal"] },
+        "description": "**Precondición:** correr esto **antes** de **Socio fija su meta**, o contra un socio recién creado que nunca definió meta. Si ya corriste el resto de la carpeta con este mismo `nutrition_member_id`, va a devolver `200` en vez de `404` — para reproducirlo aislado, repite el flujo con otro socio.\n\n> **Nota:** `NUTRITION_GOAL_NOT_FOUND` no aparece en la tabla de códigos de `03-API-REST.md §4` (que documenta el patrón genérico `<ENTITY>_NOT_FOUND` para 404). Vale la pena confirmarlo contra el `GlobalExceptionHandler` real antes de darlo por definitivo.\n\n| `error_code` | HTTP |\n|---|---|\n| `NUTRITION_GOAL_NOT_FOUND` | 404 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"404 si no hay meta vigente\", function () {",
+          "    if (pm.response.code === 404) {",
+          "        pm.expect(pm.response.json().error_code).to.eql(\"NUTRITION_GOAL_NOT_FOUND\");",
+          "    } else {",
+          "        pm.expect(pm.response.code).to.eql(200);",
+          "        console.log(\"El socio ya tiene meta vigente: corre este caso contra un socio sin meta para ver el 404.\");",
+          "    }",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
+},
+
+
+
+{
+  "name": "Nutrition Summary",
+  "item": [
+    {
+      "name": "Resumen diario (socio, su propio archivo)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-summary?date=2026-08-11",
+          "host": ["{{base_url}}"],
+          "path": ["members", "{{nutrition_member_id}}", "nutrition-summary"],
+          "query": [{ "key": "date", "value": "2026-08-11" }]
+        },
+        "description": "**Rol: T S.** Calorías y macros totales del día, desglose por tiempo de comida, y comparación contra la meta (`por debajo` / `dentro del rango` / `por encima`)."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Resumen diario (entrenador asignado)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-summary?date=2026-08-11",
+          "host": ["{{base_url}}"],
+          "path": ["members", "{{nutrition_member_id}}", "nutrition-summary"],
+          "query": [{ "key": "date", "value": "2026-08-11" }]
+        },
+        "description": "**Rol: T S.**"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Tendencia 7 días (rango from/to)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/{{nutrition_member_id}}/nutrition-summary?from=2026-08-05&to=2026-08-14",
+          "host": ["{{base_url}}"],
+          "path": ["members", "{{nutrition_member_id}}", "nutrition-summary"],
+          "query": [
+            { "key": "from", "value": "2026-08-05" },
+            { "key": "to", "value": "2026-08-14" }
+          ]
+        },
+        "description": "**Rol: T S.** Con `from`/`to` la respuesta es una lista de resúmenes diarios: la base de la tendencia de 7 o 30 días que pide el enunciado."
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"200 OK\", function () { pm.response.to.have.status(200); });"
+        ] } }
+      ],
+      "response": []
+    },
+    {
+      "name": "Entrenador consulta resumen de socio no asignado (Error - TRAINER_SCOPE_VIOLATION)",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/members/999999/nutrition-summary?date=2026-08-11",
+          "host": ["{{base_url}}"],
+          "path": ["members", "999999", "nutrition-summary"],
+          "query": [{ "key": "date", "value": "2026-08-11" }]
+        },
+        "description": "Misma regla de visibilidad que en **Meals**: el resumen deriva de `meal`/`meal_item`, así que hereda la restricción del entrenador.\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+      },
+      "event": [
+        { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
+          "    pm.response.to.have.status(403);",
+          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "});"
+        ] } }
+      ],
+      "response": []
+    }
+  ]
 }
+
+
+
+
+
   ]
 }

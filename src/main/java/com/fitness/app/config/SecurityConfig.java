@@ -186,6 +186,29 @@ public class SecurityConfig
                     // report. All endpoints read-only, admin-only (role A).
                     .requestMatchers("/api/v1/reports/**").hasRole("ADMIN")
 
+                    .requestMatchers(HttpMethod.PUT,
+                                "/api/v1/members/*/routines",
+                                "/api/v1/members/*/nutrition-goal")
+                                .hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                    .requestMatchers(HttpMethod.GET,
+                                "/api/v1/members/*/routines",
+                                "/api/v1/members/*/nutrition-summary",
+                                "/api/v1/members/*/nutrition-goal")
+                                .hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+
+                // --- nutrition : catálogo de alimentos (solo ADMIN edita)
+                     .requestMatchers(HttpMethod.GET, "/api/v1/foods", "/api/v1/foods/*")
+                                .hasAnyRole("ADMIN", "TRAINER", "MEMBER")
+                      .requestMatchers(HttpMethod.POST, "/api/v1/foods", "/api/v1/foods/*").hasRole("ADMIN")
+                      .requestMatchers(HttpMethod.PUT, "/api/v1/foods", "/api/v1/foods/*").hasRole("ADMIN")
+                      .requestMatchers(HttpMethod.DELETE, "/api/v1/foods", "/api/v1/foods/*").hasRole("ADMIN")
+
+                // --- nutrition comidas diarias (S registra/edita/elimina; T y S consultan)
+                      .requestMatchers(HttpMethod.GET, "/api/v1/meals", "/api/v1/meals/*").hasAnyRole("TRAINER", "MEMBER")
+                      .requestMatchers(HttpMethod.POST, "/api/v1/meals").hasRole("MEMBER")
+                      .requestMatchers(HttpMethod.PUT, "/api/v1/meals/*").hasRole("MEMBER")
+                      .requestMatchers(HttpMethod.DELETE, "/api/v1/meals/*").hasRole("MEMBER")
+
                     .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                     .authenticationEntryPoint((request, response, exception) ->
