@@ -7,6 +7,7 @@ import com.fitness.app.nutrition.dto.FoodResponse;
 import com.fitness.app.nutrition.model.Food;
 import com.fitness.app.nutrition.model.FoodCategory;
 import com.fitness.app.nutrition.repository.FoodRepository;
+import com.fitness.app.nutrition.repository.MealItemRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,7 +25,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class FoodService
 {
-    private final FoodRepository foodRepository;
+    private final FoodRepository     foodRepository;
+    private final MealItemRepository mealItemRepository;
 
     /** Busca alimentos con filtros de categoria, texto y estado activo. */
     @Transactional(readOnly = true)
@@ -77,6 +79,11 @@ public class FoodService
                     "Ya existe un alimento con ese código.");
         }
 
+        if (nutritionChanged(food, request) && mealItemRepository.existsByFoodId(foodId))
+        {
+            throw new BusinessException(ErrorCode.FOOD_IN_USE);
+        }
+
         food.setCode(request.code());
         food.setName(request.name());
         food.setCategory(request.category());
@@ -94,6 +101,26 @@ public class FoodService
     public void deactivate(Long foodId)
     {
         findOrFail(foodId).setActive(false);
+    }
+
+    /**
+     * ¿Cambia la petición algún valor del que dependen las calorías ya calculadas?
+     *
+     * meal_item solo guarda meal_id, food_id y quantity: los macros de una comida se
+     * recalculan contra la fila actual de food, así que corregir un alimento reescribía
+     * el pasado. Un dato nutricional es un hecho, no una preferencia; si estaba mal, se
+     * da de alta otro alimento. El nombre, el código y la categoría siguen siendo
+     * editables porque no entran en el cálculo.
+     *
+     * compareTo y no equals: para BigDecimal, 200 y 200.00 no son iguales según equals.
+     */
+    private boolean nutritionChanged(Food food, FoodRequest request)
+    {
+        return food.getServingSize().compareTo(request.servingSize())       != 0
+            || food.getCalories().compareTo(request.calories())             != 0
+            || food.getProteinG().compareTo(request.proteinG())             != 0
+            || food.getCarbohydratesG().compareTo(request.carbohydratesG()) != 0
+            || food.getFatG().compareTo(request.fatG())                     != 0;
     }
 
     /**
