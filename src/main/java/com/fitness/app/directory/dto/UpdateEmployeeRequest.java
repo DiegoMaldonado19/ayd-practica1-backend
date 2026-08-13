@@ -2,6 +2,7 @@ package com.fitness.app.directory.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 
 import java.time.LocalDate;
 
@@ -13,7 +14,7 @@ import java.time.LocalDate;
  * to their caseload. That is a re-hire, not an edit. The trainer profile has its
  * own endpoint (PUT /trainers/{id}) and the lifecycle has PATCH /{id}/status.
  */
-public record UpdateEmployeeRequest(@NotNull @Valid PersonRequestDTO person,
-                                    @NotNull        LocalDate        hiredOn)
+public record UpdateEmployeeRequest(@NotNull @Valid          PersonRequestDTO person,
+                                    @NotNull @PastOrPresent  LocalDate        hiredOn)
 {
 }

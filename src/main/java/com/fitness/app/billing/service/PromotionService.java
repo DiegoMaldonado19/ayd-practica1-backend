@@ -2,6 +2,7 @@ package com.fitness.app.billing.service;
 
 import com.fitness.app.billing.dto.PromotionRequest;
 import com.fitness.app.billing.dto.PromotionResponse;
+import com.fitness.app.billing.model.DiscountType;
 import com.fitness.app.billing.model.Promotion;
 import com.fitness.app.billing.repository.PromotionRepository;
 import com.fitness.app.common.exception.BusinessException;
@@ -13,12 +14,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
 public class PromotionService {
+
+    /** Tope de ck_promotion_pct: un descuento porcentual no pasa del 100 %. */
+    private static final BigDecimal MAX_PERCENTAGE = new BigDecimal("100");
 
     private final PromotionRepository promotionRepository;
 
@@ -120,7 +125,27 @@ public class PromotionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROMOTION_NOT_FOUND));
     }
 
+    /**
+     * Las dos reglas que solo vivían en la base (ck_promotion_dates y ck_promotion_pct).
+     * Comprobarlas aquí las devuelve como 400 en lugar de dejarlas escapar como 500;
+     * va en applyRequest porque es el único punto por el que pasan create y update.
+     */
+    private void assertConsistent(PromotionRequest request) {
+        if (request.validTo().isBefore(request.validFrom())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "La vigencia no puede terminar antes de empezar.");
+        }
+
+        if (request.discountType() == DiscountType.PERCENTAGE
+                && request.discountValue().compareTo(MAX_PERCENTAGE) > 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Un descuento porcentual no puede exceder el 100 %.");
+        }
+    }
+
     private void applyRequest(Promotion promotion, PromotionRequest request) {
+        assertConsistent(request);
+
         promotion.setCode(request.code());
         promotion.setName(request.name());
         promotion.setDescription(request.description());

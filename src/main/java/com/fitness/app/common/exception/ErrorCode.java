@@ -62,7 +62,7 @@ public enum ErrorCode
     TRANSFER_TARGET_INVALID       (HttpStatus.CONFLICT,            "CHOOSE_ANOTHER_TRAINER",  "El entrenador destino no tiene capacidad para recibir la cartera."),
     MEAL_EDIT_WINDOW_CLOSED       (HttpStatus.CONFLICT,            null,                      "Solo puedes editar comidas registradas el mismo día."),
     MEASUREMENT_DUPLICATE_DATE    (HttpStatus.CONFLICT,            null,                      "Ya existe una medición de este socio en esa fecha."),
-    FOOD_IN_USE                   (HttpStatus.CONFLICT,            "DEACTIVATE_INSTEAD",      "El alimento ya se usó en comidas registradas."),
+    FOOD_IN_USE                   (HttpStatus.CONFLICT,            "CREATE_NEW_FOOD",         "El alimento ya se usó en comidas registradas: sus valores nutricionales no pueden cambiar."),
     INVALID_ROUTINE_STATUS_TRANSITION(HttpStatus.CONFLICT,         null,                      "El cambio de estado de la rutina no está permitido."),
     TRAINER_ALERT_ALREADY_CLOSED  (HttpStatus.CONFLICT,            null,                      "La alerta ya fue resuelta o descartada."),
     // --- Billing --------------------------------------------------------------
@@ -109,6 +109,7 @@ public enum ErrorCode
     NUTRITION_GOAL_NOT_FOUND      (HttpStatus.NOT_FOUND, null, "El objetivo nutricional no existe."),    
     // --- Transversal ----------------------------------------------------------
     VALIDATION_ERROR              (HttpStatus.BAD_REQUEST,         null,                      "Hay campos inválidos en la solicitud."),
+    CONSTRAINT_VIOLATION          (HttpStatus.CONFLICT,            "REVIEW_INPUT",            "La operación viola una regla de integridad de los datos."),
     INTERNAL_ERROR                (HttpStatus.INTERNAL_SERVER_ERROR, null,                    "Ocurrió un error inesperado. Reporta el identificador de traza.");
 
     private final HttpStatus httpStatus;

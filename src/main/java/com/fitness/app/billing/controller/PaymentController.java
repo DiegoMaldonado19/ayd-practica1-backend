@@ -9,10 +9,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
 import java.time.LocalDate;
 
 @RestController
@@ -36,28 +37,30 @@ public class PaymentController {
      * @return página de `PaymentResponse`
      */
     public Page<PaymentResponse> list(@RequestParam(name = "member_id", required = false) Long memberId,
-                                       @RequestParam(required = false) LocalDate from,
-                                       @RequestParam(required = false) LocalDate to,
-                                       @RequestParam(required = false) PaymentStatus status,
-                                       @RequestParam(name = "payment_method", required = false) PaymentMethod paymentMethod,
-                                       @AuthenticationPrincipal AuthenticatedUser principal,
-                                       Pageable pageable) {
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to,
+            @RequestParam(required = false) PaymentStatus status,
+            @RequestParam(name = "payment_method", required = false) PaymentMethod paymentMethod,
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            Pageable pageable) {
         PaymentFilter filter = new PaymentFilter(memberId, from, to, status, paymentMethod);
         return paymentService.list(filter, principal, pageable);
     }
 
     @PostMapping("/payments")
-    @ResponseStatus(HttpStatus.CREATED)
     /**
      * Registra un pago nuevo y devuelve su representación.
      *
      * @param request   datos del pago
      * @param principal usuario autenticado que registra el pago
-     * @return `PaymentResponse` creado
+     * @return `PaymentResponse` creado, con su Location
      */
-    public PaymentResponse register(@Valid @RequestBody PaymentRequest request,
-                                     @AuthenticationPrincipal AuthenticatedUser principal) {
-        return paymentService.register(request, principal);
+    public ResponseEntity<PaymentResponse> register(@Valid @RequestBody PaymentRequest request,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        PaymentResponse payment = paymentService.register(request, principal);
+
+        return ResponseEntity.created(URI.create("/api/v1/payments/" + payment.paymentId()))
+                .body(payment);
     }
 
     @GetMapping("/payments/{id}")
@@ -69,7 +72,7 @@ public class PaymentController {
      * @return `PaymentResponse` del pago
      */
     public PaymentResponse findById(@PathVariable Long id,
-                                     @AuthenticationPrincipal AuthenticatedUser principal) {
+            @AuthenticationPrincipal AuthenticatedUser principal) {
         return paymentService.findById(id, principal);
     }
 
@@ -88,12 +91,12 @@ public class PaymentController {
     /**
      * Anula un pago existente con la razón indicada.
      *
-     * @param id id del pago
+     * @param id      id del pago
      * @param request detalles de la anulación
      * @return `PaymentResponse` actualizado
      */
     public PaymentResponse voidPayment(@PathVariable Long id,
-                                        @Valid @RequestBody PaymentVoidRequest request) {
+            @Valid @RequestBody PaymentVoidRequest request) {
         return paymentService.voidPayment(id, request);
     }
 
@@ -101,12 +104,12 @@ public class PaymentController {
     /**
      * Obtiene el recibo de un pago confirmado, si está disponible.
      *
-     * @param id id del pago
+     * @param id        id del pago
      * @param principal usuario autenticado
      * @return `ReceiptResponse` del recibo
      */
     public ReceiptResponse receipt(@PathVariable Long id,
-                                    @AuthenticationPrincipal AuthenticatedUser principal) {
+            @AuthenticationPrincipal AuthenticatedUser principal) {
         return paymentService.getReceipt(id, principal);
     }
 }

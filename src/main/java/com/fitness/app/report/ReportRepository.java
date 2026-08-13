@@ -65,24 +65,36 @@ public class ReportRepository
 
     /**
      * Memberships expiring or recently expired.
+     *
+     * The status is derived from end_date instead of read from the column. The column
+     * only catches up when expireMemberships() runs at 00:05, and retire() also writes
+     * EXPIRED on renewal, so it means two different things; filtering by it returned
+     * contracts that are still in force and hid the ones that really lapsed.
+     * CANCELLED is the one state a date cannot express, so it still wins.
      */
     public List<MembershipExpiryResponse> memberships(String status, Integer expiringInDays)
     {
         String sql = """
-                SELECT m.membership_id,
-                       CONCAT(p.first_name, ' ', p.last_name) AS member_name,
-                       mp.name AS plan_name,
-                       m.status,
-                       m.end_date,
-                       CAST((m.end_date - CURRENT_DATE) AS INT) AS days_to_expiry
-                  FROM membership m
-                  JOIN membership_plan mp ON m.membership_plan_id = mp.membership_plan_id
-                  JOIN member mb ON m.member_id = mb.member_id
-                  JOIN person p ON mb.person_id = p.person_id
-                 WHERE (CAST(:status AS VARCHAR) IS NULL OR m.status = :status)
+                WITH contract AS (
+                    SELECT m.membership_id,
+                           CONCAT(p.first_name, ' ', p.last_name) AS member_name,
+                           mp.name AS plan_name,
+                           CASE WHEN m.status = 'CANCELLED'    THEN 'CANCELLED'
+                                WHEN m.end_date < CURRENT_DATE THEN 'EXPIRED'
+                                WHEN m.status = 'FROZEN'       THEN 'FROZEN'
+                                ELSE 'ACTIVE' END              AS status,
+                           m.end_date,
+                           CAST((m.end_date - CURRENT_DATE) AS INT) AS days_to_expiry
+                      FROM membership m
+                      JOIN membership_plan mp ON m.membership_plan_id = mp.membership_plan_id
+                      JOIN member mb ON m.member_id = mb.member_id
+                      JOIN person p ON mb.person_id = p.person_id
+                )
+                SELECT * FROM contract
+                 WHERE (CAST(:status AS VARCHAR) IS NULL OR status = :status)
                    AND (CAST(:expiringInDays AS INT) IS NULL
-                        OR m.end_date <= CURRENT_DATE + :expiringInDays)
-                 ORDER BY m.end_date
+                        OR days_to_expiry <= :expiringInDays)
+                 ORDER BY end_date
                 """;
 
         var params = new MapSqlParameterSource()

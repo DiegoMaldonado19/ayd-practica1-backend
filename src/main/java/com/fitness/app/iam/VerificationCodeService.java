@@ -75,7 +75,6 @@ public class VerificationCodeService
         var saved = verificationCodeRepository.save(code);
 
         deliver(saved, plainCode, destination);
-        log.info("CÓDIGO 2FA PARA EL USUARIO [{}]: {}", user.getUsername(), plainCode);
 
         return saved;
     }
