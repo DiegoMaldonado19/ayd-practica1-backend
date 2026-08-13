@@ -3,7 +3,6 @@ package com.fitness.app.nutrition.controller;
 import com.fitness.app.iam.dto.AuthenticatedUser;
 import com.fitness.app.nutrition.dto.NutritionGoalRequest;
 import com.fitness.app.nutrition.dto.NutritionGoalResponse;
-import com.fitness.app.nutrition.dto.NutritionSummaryResponse;
 import com.fitness.app.nutrition.service.NutritionGoalService;
 import com.fitness.app.nutrition.service.NutritionSummaryService;
 
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * Centraliza la consulta del resumen nutricional y la meta del miembro.
