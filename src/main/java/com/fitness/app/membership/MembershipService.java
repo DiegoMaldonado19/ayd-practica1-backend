@@ -64,6 +64,15 @@ public class MembershipService
     /** A date no contract can reach: the listing sends it when nobody asked to filter by expiry. */
     private static final LocalDate NO_EXPIRY_FILTER = LocalDate.of(9999, 12, 31);
 
+    /**
+     * How far ahead a contract may be signed. @FutureOrPresent already closes the past;
+     * this closes the other end, where a start date in 2030 used to be accepted and left
+     * the member holding an ACTIVE contract that blocks any other for years. A constant
+     * and not a gym property: the statement leaves five policies to the team and this is
+     * not one of them.
+     */
+    private static final int MAX_START_HORIZON_DAYS = 30;
+
     private final MembershipRepository       membershipRepository;
     private final MembershipFreezeRepository membershipFreezeRepository;
     private final MembershipPlanService      membershipPlanService;
@@ -199,11 +208,11 @@ public class MembershipService
 
         assertPlanIsSellable(plan);
 
-        var membership = sign(request.memberId(),
-                              plan,
-                              request.startDate() == null ? LocalDate.now() : request.startDate(),
-                              request.notes(),
-                              principal);
+        var startDate = request.startDate() == null ? LocalDate.now() : request.startDate();
+
+        assertStartDateIsWithinHorizon(startDate);
+
+        var membership = sign(request.memberId(), plan, startDate, request.notes(), principal);
 
         return MembershipResponse.from(membershipRepository.save(membership));
     }
@@ -364,7 +373,11 @@ public class MembershipService
         var freeze = membershipFreezeRepository.findByMembershipIdAndReactivatedOnIsNull(membershipId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FREEZE_NOT_IN_PROGRESS));
 
-        var frozenDays = freeze.frozenDays(today);
+        // The only point where frozen days are credited, so the cap belongs here and not
+        // in assertCycleAllowsAnotherFreeze(): that one can only project the days when
+        // expectedEndDate came in the request, and omitting the optional field was enough
+        // to walk past it and extend the contract without limit.
+        var frozenDays = Math.min(freeze.frozenDays(today), remainingCycleDays(membershipId, today));
 
         freeze.setReactivatedOn(today);
         freeze.setReactivatedByUserId(principal.appUserId());
@@ -578,6 +591,34 @@ public class MembershipService
         {
             throw new BusinessException(ErrorCode.FREEZE_LIMIT_REACHED);
         }
+    }
+
+    /** A contract may start today or soon, never years ahead. @FutureOrPresent covers the past. */
+    private void assertStartDateIsWithinHorizon(LocalDate startDate)
+    {
+        if (startDate.isAfter(LocalDate.now().plusDays(MAX_START_HORIZON_DAYS)))
+        {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                                        "La fecha de inicio no puede exceder los "
+                                      + MAX_START_HORIZON_DAYS + " días.");
+        }
+    }
+
+    /**
+     * Days of freezing still available in the current cycle.
+     *
+     * Only closed freezes count: the open one is the one being reactivated right now,
+     * and charging it against its own allowance would always yield zero.
+     */
+    private long remainingCycleDays(Long membershipId, LocalDate today)
+    {
+        var used = withinCycle(membershipFreezeRepository.findByMembershipIdOrderByStartDateDesc(membershipId), today)
+                .stream()
+                .filter(freeze -> freeze.getReactivatedOn() != null)
+                .mapToLong(freeze -> freeze.frozenDays(today))
+                .sum();
+
+        return Math.max(0, gymProperties.freeze().maxDaysPerCycle() - used);
     }
 
     /** The freezes that count against the current cycle window. */

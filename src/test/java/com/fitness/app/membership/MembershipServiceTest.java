@@ -174,6 +174,50 @@ class MembershipServiceTest
         assertEquals(LocalDate.now(), freeze.getReactivatedOn());
     }
 
+    /**
+     * D-01: assertCycleAllowsAnotherFreeze() can only project the days when the request
+     * carried expectedEndDate, so omitting that optional field used to buy unlimited
+     * membership. The cap now lives where the days are actually credited.
+     */
+    @Test
+    void reactivationCreditsAtMostTheDaysLeftInTheCycle()
+    {
+        var membership  = membership(MembershipStatus.FROZEN);
+        var originalEnd = membership.getEndDate();
+        var open        = openFreeze(40);
+
+        when(membershipRepository.findById(MEMBERSHIP_ID)).thenReturn(Optional.of(membership));
+        when(membershipFreezeRepository.findByMembershipIdAndReactivatedOnIsNull(MEMBERSHIP_ID))
+                .thenReturn(Optional.of(open));
+        // 12 of the 15 days of the cycle are already spent by a freeze that did close.
+        when(membershipFreezeRepository.findByMembershipIdOrderByStartDateDesc(MEMBERSHIP_ID))
+                .thenReturn(List.of(closedFreeze(30, 12), open));
+
+        var reactivated = membershipService.reactivate(MEMBERSHIP_ID, principal());
+
+        assertEquals(originalEnd.plusDays(3), reactivated.endDate(),
+                     "40 días congelados con 12 ya gastados solo pueden acreditar los 3 que quedan");
+    }
+
+    /** expireMemberships() had no test at all, and it is what keeps the status column honest. */
+    @Test
+    void theSweepExpiresTheContractsThatReachedTheirEndDateAndWarnsTheirMembers()
+    {
+        var due = membership(MembershipStatus.ACTIVE);
+
+        due.setEndDate(LocalDate.now().minusDays(1));
+
+        when(membershipRepository.findDueToExpire(LocalDate.now(), MembershipStatus.ACTIVE))
+                .thenReturn(List.of(due));
+
+        membershipService.expireMemberships();
+
+        verify(membershipRepository).expireDueContracts(LocalDate.now(),
+                                                        MembershipStatus.ACTIVE,
+                                                        MembershipStatus.EXPIRED);
+        verify(notificationService).membershipExpired(MEMBER_ID, due.getEndDate());
+    }
+
     @Test
     void refusesToReactivateAContractThatIsNotFrozen()
     {

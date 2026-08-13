@@ -30,6 +30,8 @@
 		<java.version>25</java.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<springdoc.version>3.1.0</springdoc.version>
+		<poi.version>5.4.1</poi.version>
+		<openpdf.version>2.0.3</openpdf.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -81,6 +83,19 @@
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>${springdoc.version}</version>
+		</dependency>
+
+		<!-- Report export. Boot's BOM manages neither, so both carry an explicit version.
+		     PNG needs no dependency: it is rendered with ImageIO and Graphics2D of the JDK. -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>${poi.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>${openpdf.version}</version>
 		</dependency>
 
 		<dependency>

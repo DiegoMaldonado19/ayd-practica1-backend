@@ -14,6 +14,9 @@ public interface MealItemRepository extends JpaRepository<MealItem, Long>
     /** Recupera las líneas de alimentos de una o varias comidas. */
     List<MealItem> findByMealIdIn(Collection<Long> mealIds);
 
+    /** ¿Algún socio ya consumió este alimento? Decide si sus macros pueden cambiar. */
+    boolean existsByFoodId(Long foodId);
+
     /** Obtiene los items en orden para una comida específica. */
     List<MealItem> findByMealIdOrderByMealItemId(Long mealId);
 

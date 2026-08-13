@@ -5,13 +5,16 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record ProgressMeasurementRequest(
-    @NotNull
+    // A measurement is a reading that already happened; a future date is a typo.
+    // Backdating stays allowed on purpose, to load a member's history.
+    @NotNull @PastOrPresent
     @JsonProperty("measured_on")
     LocalDate    measuredOn,
 

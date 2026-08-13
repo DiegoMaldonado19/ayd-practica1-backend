@@ -4,6 +4,7 @@ import com.fitness.app.common.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -102,6 +103,24 @@ public class GlobalExceptionHandler
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(ErrorCode.ROUTE_NOT_FOUND, request.getRequestURI()));
+    }
+
+    /**
+     * A CHECK or a unique index that the service did not check first. Without this it
+     * would fall into handleUnexpected and answer 500 with a traceId, presenting a rule
+     * the client broke as a failure of the server. The constraint name goes to the log
+     * and never to the body: the client does not need the names of our indexes.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
+                                                             HttpServletRequest request)
+    {
+        log.warn("errorCode={} method={} path={} message={}",
+                 ErrorCode.CONSTRAINT_VIOLATION, request.getMethod(), request.getRequestURI(),
+                 ex.getMostSpecificCause().getMessage(), ex);
+
+        return ResponseEntity.status(ErrorCode.CONSTRAINT_VIOLATION.getHttpStatus())
+                .body(ErrorResponse.of(ErrorCode.CONSTRAINT_VIOLATION, request.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)

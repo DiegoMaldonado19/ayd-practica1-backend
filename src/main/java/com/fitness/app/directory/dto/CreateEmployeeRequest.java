@@ -4,6 +4,7 @@ import com.fitness.app.directory.model.EmployeePosition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -18,7 +19,7 @@ import java.time.LocalDate;
  */
 public record CreateEmployeeRequest(@NotNull @Valid       PersonRequestDTO person,
                                     @NotNull              EmployeePosition position,
-                                    @NotNull              LocalDate        hiredOn,
+                                    @NotNull @PastOrPresent LocalDate      hiredOn,
                                     @Positive @Max(32767) Short            maxMemberLoad,
                                     @Size(max = 500)      String           bio)
 {

@@ -12,8 +12,6 @@ import com.fitness.app.report.dto.RevenueGrouping;
 import com.fitness.app.report.dto.RevenueResponse;
 import com.fitness.app.report.dto.TrainerLoadResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,15 +22,15 @@ import java.util.List;
 
 /**
  * Report endpoints. All GET, read-only, admin-only (role A).
- * Supports format=json|csv. Defaults to JSON.
+ * Supports format=json|csv|xlsx|pdf|png. Defaults to JSON.
  */
 @RestController
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
 public class ReportController
 {
-    private final ReportService reportService;
-    private final ReportCsv     reportCsv;
+    private final ReportService  reportService;
+    private final ReportExporter reportExporter;
 
     @GetMapping("/revenue")
     public Object revenue(
@@ -43,7 +41,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<RevenueResponse> rows = reportService.revenue(from, to, groupBy, planId);
-        return respondJson(rows, format, "revenue");
+        return reportExporter.export(rows, format, "revenue");
     }
 
     @GetMapping("/memberships")
@@ -53,7 +51,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<MembershipExpiryResponse> rows = reportService.memberships(status, expiringInDays);
-        return respondJson(rows, format, "memberships");
+        return reportExporter.export(rows, format, "memberships");
     }
 
     @GetMapping("/member-distribution")
@@ -63,7 +61,7 @@ public class ReportController
     {
         LocalDate resolvedAsOf = asOf != null ? asOf : LocalDate.now();
         List<MemberDistributionResponse> rows = reportService.memberDistribution(resolvedAsOf);
-        return respondJson(rows, format, "member-distribution");
+        return reportExporter.export(rows, format, "member-distribution");
     }
 
     @GetMapping("/class-attendance")
@@ -75,7 +73,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<ClassAttendanceResponse> rows = reportService.classAttendance(from, to, groupClassId, trainerId);
-        return respondJson(rows, format, "class-attendance");
+        return reportExporter.export(rows, format, "class-attendance");
     }
 
     @GetMapping("/class-demand")
@@ -85,7 +83,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<ClassDemandResponse> rows = reportService.classDemand(from, to);
-        return respondJson(rows, format, "class-demand");
+        return reportExporter.export(rows, format, "class-demand");
     }
 
     @GetMapping("/trainer-load")
@@ -95,7 +93,7 @@ public class ReportController
     {
         LocalDate resolvedAsOf = asOf != null ? asOf : LocalDate.now();
         List<TrainerLoadResponse> rows = reportService.trainerLoad(resolvedAsOf);
-        return respondJson(rows, format, "trainer-load");
+        return reportExporter.export(rows, format, "trainer-load");
     }
 
     @GetMapping("/member-progress")
@@ -106,7 +104,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<MemberProgressResponse> rows = reportService.memberProgress(memberId, from, to);
-        return respondJson(rows, format, "member-progress");
+        return reportExporter.export(rows, format, "member-progress");
     }
 
     @GetMapping("/guest-passes")
@@ -117,7 +115,7 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<GuestPassUsageResponse> rows = reportService.guestPasses(from, to, passType);
-        return respondJson(rows, format, "guest-passes");
+        return reportExporter.export(rows, format, "guest-passes");
     }
 
     @GetMapping("/nutrition-adherence")
@@ -128,25 +126,6 @@ public class ReportController
             @RequestParam(defaultValue = "JSON") ReportFormat format)
     {
         List<NutritionAdherenceResponse> rows = reportService.nutritionAdherence(from, to, limit);
-        return respondJson(rows, format, "nutrition-adherence");
-    }
-
-    /**
-     * Helper to respond in JSON or CSV format. Sets appropriate headers for CSV downloads.
-     */
-    private Object respondJson(List<?> rows, ReportFormat format, String fileName)
-    {
-        if (format == ReportFormat.CSV)
-        {
-            String csv = reportCsv.toCsv(rows);
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".csv\"")
-                    .body(csv);
-        }
-        else
-        {
-            return rows;
-        }
+        return reportExporter.export(rows, format, "nutrition-adherence");
     }
 }
