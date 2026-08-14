@@ -183,6 +183,6 @@ class MemberServiceTest
     private static UserResponse account(Long personId)
     {
         return new UserResponse(1L, personId, "alopez", "Ana Lopez", "ana@fitnessapp.local",
-                                UserRole.MEMBER, UserStatus.ACTIVE, true, VerificationChannel.EMAIL, null);
+                                UserRole.MEMBER, UserStatus.ACTIVE, true, VerificationChannel.EMAIL, null, null);
     }
 }

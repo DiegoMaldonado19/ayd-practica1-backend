@@ -183,7 +183,7 @@ class NotificationServiceTest
     private static UserResponse account(String email)
     {
         return new UserResponse(APP_USER_ID, 7L, "socio", "Ana Pérez", email,
-                                UserRole.MEMBER, UserStatus.ACTIVE, false, null, null);
+                                UserRole.MEMBER, UserStatus.ACTIVE, false, null, null, null);
     }
 
     private static AuthenticatedUser principal(Long appUserId)

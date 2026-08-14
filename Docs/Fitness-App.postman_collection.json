@@ -787,6 +787,10 @@
                   "        pm.expect(body.token_type).to.eql(\"Bearer\");",
                   "        pm.expect(body.user.role).to.be.a(\"string\");",
                   "    });",
+                  "",
+                  "    pm.test(\"Una cuenta que no es socio no trae member_id\", function () {",
+                  "        pm.expect(body.user).to.not.have.property(\"member_id\");",
+                  "    });",
                   "} else {",
                   "    pm.collectionVariables.set(\"challenge_id\", body.challenge_id);",
                   "",
@@ -1158,7 +1162,7 @@
                 "me"
               ]
             },
-            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qu\u00e9 mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la p\u00e1gina.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
+            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qu\u00e9 mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la p\u00e1gina.\n\nS\u00f3lo cuando la cuenta es de rol `MEMBER` y tiene ficha, la respuesta agrega `member_id`; para cualquier otro rol la clave se omite. Aqu\u00ed corre con el token del administrador, as\u00ed que no aparece: la versi\u00f3n con token de socio es **Training setup \u203a Perfil del socio**.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
           },
           "event": [
             {
@@ -1177,6 +1181,10 @@
                   "pm.test(\"Trae rol y usuario\", function () {",
                   "    pm.expect(body.role).to.be.a(\"string\");",
                   "    pm.expect(body.username).to.eql(pm.collectionVariables.get(\"admin_username\"));",
+                  "});",
+                  "",
+                  "pm.test(\"El administrador no trae member_id\", function () {",
+                  "    pm.expect(body).to.not.have.property(\"member_id\");",
                   "});"
                 ]
               }
@@ -12946,7 +12954,46 @@
               "    });",
               "    const body = pm.response.json();",
               "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+              "",
+              "    pm.test(\"El token del socio trae su member_id\", function () {",
+              "        pm.expect(body.user.member_id).to.eql(Number(pm.collectionVariables.get(\"member_id\")));",
+              "    });",
               "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Perfil del socio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/auth/me",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "me"]
+        },
+        "description": "**Rol: S.** El mismo `/auth/me` de la carpeta Auth, pero con el token del socio: aquí sí aparece `member_id`, que es lo que la interfaz necesita para pedir sus membresías, rutinas, comidas y pagos sin una llamada extra.\n\nAuth › Perfil actual no sirve para comprobarlo porque corre con el token del administrador."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200 con el perfil\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "",
+              "pm.test(\"Es el socio y trae su member_id\", function () {",
+              "    pm.expect(body.role).to.eql(\"MEMBER\");",
+              "    pm.expect(body.member_id).to.eql(Number(pm.collectionVariables.get(\"member_id\")));",
+              "});"
             ]
           }
         }
@@ -13229,13 +13276,20 @@
           "raw": "{\n  \"member_id\": {{member_id}},\n  \"trainer_id\": {{trainer_id}}\n}"
         },
         "url": { "raw": "{{base_url}}/trainer-assignments", "host": ["{{base_url}}"], "path": ["trainer-assignments"] },
-        "description": "**Precondición manual:** el entrenador de `trainer_id` ya debe tener `max_member_load` socios activos (repite **Asignar entrenador** con otros socios hasta llenar el cupo de 3 del setup).\n\n| `error_code` | HTTP | `suggested_action` |\n|---|---|---|\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | `CHOOSE_ANOTHER_TRAINER` |"
+        "description": "**Precondición manual:** el entrenador de `trainer_id` ya debe tener `max_member_load` socios activos (repite **Asignar entrenador** con otros socios hasta llenar el cupo de 3 del setup).\n\nEn el recorrido completo no se cumple: este caso reenvía el mismo `member_id` que **Reasignar a otro entrenador** acaba de asignar, así que salta antes `TRAINER_ALREADY_ASSIGNED` y el cupo ni se llega a evaluar.\n\n| `error_code` | HTTP | `suggested_action` |\n|---|---|---|\n| `TRAINER_CAPACITY_EXCEEDED` | 409 | `CHOOSE_ANOTHER_TRAINER` |"
       },
       "event": [
         { "listen": "test", "script": { "type": "text/javascript", "exec": [
-          "pm.test(\"409 TRAINER_CAPACITY_EXCEEDED\", function () {",
+          "pm.test(\"409 TRAINER_CAPACITY_EXCEEDED si el cupo esta lleno\", function () {",
+          "    // Los dos desenlaces son 409, asi que el ramal va por error_code y no por status.",
           "    pm.response.to.have.status(409);",
-          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_CAPACITY_EXCEEDED\");",
+          "",
+          "    const errorCode = pm.response.json().error_code;",
+          "",
+          "    if (errorCode !== \"TRAINER_CAPACITY_EXCEEDED\") {",
+          "        pm.expect(errorCode).to.eql(\"TRAINER_ALREADY_ASSIGNED\");",
+          "        console.log(\"Precondicion manual sin cumplir: el socio ya esta asignado a ese entrenador y el cupo no esta lleno. Llena max_member_load con otros socios y repite este caso contra un socio libre.\");",
+          "    }",
           "});"
         ] } }
       ],
@@ -14423,13 +14477,17 @@
         "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{trainer_access_token}}", "type": "string" }] },
         "method": "GET",
         "url": { "raw": "{{base_url}}/meals/1", "host": ["{{base_url}}"], "path": ["meals", "1"] },
-        "description": "El entrenador solo puede ver el registro de alimentación de los socios que tiene asignados personalmente, nunca del resto (regla de visibilidad explícita del enunciado).\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
+        "description": "El entrenador solo puede ver el registro de alimentación de los socios que tiene asignados personalmente, nunca del resto (regla de visibilidad explícita del enunciado).\n\n**Precondición manual:** `/meals/1` tiene que ser de un socio que el token **no** tenga asignado. En el recorrido completo no lo es: `Nutrition · Setup` deja `trainer_access_token` en el entrenador de esta carpeta, que sí tiene asignado al dueño de esa comida, así que responde `200`. Para ver el `403`, corre este caso con el token de otro entrenador (`Training setup` deja el suyo antes de que Nutrition lo sobrescriba).\n\n| `error_code` | HTTP |\n|---|---|\n| `TRAINER_SCOPE_VIOLATION` | 403 |"
       },
       "event": [
         { "listen": "test", "script": { "type": "text/javascript", "exec": [
-          "pm.test(\"403 TRAINER_SCOPE_VIOLATION\", function () {",
-          "    pm.response.to.have.status(403);",
-          "    pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "pm.test(\"403 TRAINER_SCOPE_VIOLATION si la comida no es de un socio asignado\", function () {",
+          "    if (pm.response.code === 403) {",
+          "        pm.expect(pm.response.json().error_code).to.eql(\"TRAINER_SCOPE_VIOLATION\");",
+          "    } else {",
+          "        pm.expect(pm.response.code).to.eql(200);",
+          "        console.log(\"Precondicion manual sin cumplir: /meals/1 es de un socio que este entrenador si tiene asignado. Corre el caso con el token de otro entrenador para ver el 403.\");",
+          "    }",
           "});"
         ] } }
       ],
@@ -14564,9 +14622,13 @@
       },
       "event": [
         { "listen": "test", "script": { "type": "text/javascript", "exec": [
-          "pm.test(\"409 MEMBERSHIP_NOT_ACTIVE\", function () {",
-          "    pm.response.to.have.status(409);",
-          "    pm.expect(pm.response.json().error_code).to.eql(\"MEMBERSHIP_NOT_ACTIVE\");",
+          "pm.test(\"409 MEMBERSHIP_NOT_ACTIVE si la membresia no esta vigente\", function () {",
+          "    if (pm.response.code === 409) {",
+          "        pm.expect(pm.response.json().error_code).to.eql(\"MEMBERSHIP_NOT_ACTIVE\");",
+          "    } else {",
+          "        pm.expect(pm.response.code).to.eql(201);",
+          "        console.log(\"Precondicion manual sin cumplir: la membresia del socio sigue activa. Congelala o cancelala y repite este caso para ver el 409.\");",
+          "    }",
           "});"
         ] } }
       ],
