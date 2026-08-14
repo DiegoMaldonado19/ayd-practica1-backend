@@ -787,6 +787,10 @@
                   "        pm.expect(body.token_type).to.eql(\"Bearer\");",
                   "        pm.expect(body.user.role).to.be.a(\"string\");",
                   "    });",
+                  "",
+                  "    pm.test(\"Una cuenta que no es socio no trae member_id\", function () {",
+                  "        pm.expect(body.user).to.not.have.property(\"member_id\");",
+                  "    });",
                   "} else {",
                   "    pm.collectionVariables.set(\"challenge_id\", body.challenge_id);",
                   "",
@@ -1158,7 +1162,7 @@
                 "me"
               ]
             },
-            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qu\u00e9 mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la p\u00e1gina.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
+            "description": "**Todos los roles.** Perfil, rol y datos con los que la interfaz decide qu\u00e9 mostrar.\n\nEs lo que `AuthContext` del frontend consume al recargar la p\u00e1gina.\n\nS\u00f3lo cuando la cuenta es de rol `MEMBER` y tiene ficha, la respuesta agrega `member_id`; para cualquier otro rol la clave se omite. Aqu\u00ed corre con el token del administrador, as\u00ed que no aparece: la versi\u00f3n con token de socio es **Training setup \u203a Perfil del socio**.\n\nSin token o con token vencido responde `401 UNAUTHENTICATED`."
           },
           "event": [
             {
@@ -1177,6 +1181,10 @@
                   "pm.test(\"Trae rol y usuario\", function () {",
                   "    pm.expect(body.role).to.be.a(\"string\");",
                   "    pm.expect(body.username).to.eql(pm.collectionVariables.get(\"admin_username\"));",
+                  "});",
+                  "",
+                  "pm.test(\"El administrador no trae member_id\", function () {",
+                  "    pm.expect(body).to.not.have.property(\"member_id\");",
                   "});"
                 ]
               }
@@ -12946,7 +12954,46 @@
               "    });",
               "    const body = pm.response.json();",
               "    pm.collectionVariables.set(\"member_access_token\", body.access_token);",
+              "",
+              "    pm.test(\"El token del socio trae su member_id\", function () {",
+              "        pm.expect(body.user.member_id).to.eql(Number(pm.collectionVariables.get(\"member_id\")));",
+              "    });",
               "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Perfil del socio",
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{member_access_token}}", "type": "string" }] },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/auth/me",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "me"]
+        },
+        "description": "**Rol: S.** El mismo `/auth/me` de la carpeta Auth, pero con el token del socio: aquí sí aparece `member_id`, que es lo que la interfaz necesita para pedir sus membresías, rutinas, comidas y pagos sin una llamada extra.\n\nAuth › Perfil actual no sirve para comprobarlo porque corre con el token del administrador."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Responde 200 con el perfil\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const body = pm.response.json();",
+              "",
+              "pm.test(\"Es el socio y trae su member_id\", function () {",
+              "    pm.expect(body.role).to.eql(\"MEMBER\");",
+              "    pm.expect(body.member_id).to.eql(Number(pm.collectionVariables.get(\"member_id\")));",
+              "});"
             ]
           }
         }

@@ -13,7 +13,7 @@ código y se consulta en `/swagger-ui.html` (redirige a la interfaz) o en crudo 
 | Tamaño | 292 archivos Java · 31 controladores · **128 endpoints** · 109 DTOs |
 | Base de datos | **31 tablas** · 97 restricciones `CHECK` con nombre `ck_` |
 | Catálogo de errores | 80 códigos en `ErrorCode` |
-| Pruebas | 88 unitarias en 14 clases · colección de Postman con 456 aserciones |
+| Pruebas | 89 unitarias en 14 clases · colección de Postman con 461 aserciones |
 
 ---
 
@@ -227,8 +227,8 @@ suficiente antes de escribir el `.env` del servidor.
 
 | Qué | Cómo se corre | Estado |
 |---|---|---|
-| 88 pruebas unitarias, 14 clases | `mvn test` | 88/88, `BUILD SUCCESS` |
-| Colección de Postman, 456 aserciones | `node scripts/validate-api.js` | 453/456 |
+| 89 pruebas unitarias, 14 clases | `mvn test` | 89/89, `BUILD SUCCESS` |
+| Colección de Postman, 461 aserciones | `node scripts/validate-api.js` | 456/461 |
 
 Las unitarias son JUnit 5 con Mockito **sin contexto de Spring**: se ejecutan en segundos y
 prueban reglas de negocio, no cableado. La colección

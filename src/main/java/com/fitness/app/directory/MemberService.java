@@ -88,9 +88,20 @@ public class MemberService
     {
         var personId = userService.findById(principal.appUserId()).personId();
 
-        return memberRepository.findByPerson_PersonId(personId)
-                .map(Member::getMemberId)
+        return findMemberIdByPersonId(personId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+    }
+
+    /**
+     * The file of a person, empty when there is none. iam stamps it on the sign-in
+     * payload, where a MEMBER account registered in two steps may still have no file:
+     * there the absence is an answer and not a failure, which is why this one returns
+     * Optional and findOwnMemberId is the one that throws.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> findMemberIdByPersonId(Long personId)
+    {
+        return memberRepository.findByPerson_PersonId(personId).map(Member::getMemberId);
     }
 
     /**

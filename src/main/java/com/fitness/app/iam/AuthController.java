@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController
 {
     private final AuthService authService;
-    private final UserService userService;
 
     /**
      * 202 with the challenge when two-factor is on, 200 with the token when it is
@@ -81,6 +80,6 @@ public class AuthController
     @GetMapping("/me")
     public UserResponse currentUser(@AuthenticationPrincipal AuthenticatedUser principal)
     {
-        return userService.findById(principal.appUserId());
+        return authService.currentUser(principal);
     }
 }
