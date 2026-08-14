@@ -2,6 +2,7 @@ package com.fitness.app.iam;
 
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
+import com.fitness.app.directory.MemberService;
 import com.fitness.app.directory.PersonService;
 import com.fitness.app.directory.dto.PersonContactDTO;
 import com.fitness.app.iam.dto.ChallengeResponse;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -47,6 +49,7 @@ class AuthServiceTest
     @Mock  private TokenService            tokenService;
     @Mock  private VerificationCodeService verificationCodeService;
     @Mock  private PersonService           personService;
+    @Mock  private MemberService           memberService;
 
     @InjectMocks private AuthService authService;
 
@@ -112,6 +115,27 @@ class AuthServiceTest
         assertInstanceOf(TokenResponse.class, outcome);
         assertEquals("signed-jwt", ((TokenResponse) outcome).accessToken());
         assertNotNull(user.getLastLoginAt());
+        // An administrator has no member file, so the payload carries no member_id.
+        assertNull(((TokenResponse) outcome).user().memberId());
+    }
+
+    @Test
+    void stampsTheMemberIdWhenTheAccountIsAMember()
+    {
+        var user = activeUser(false);
+
+        user.setRole(UserRole.MEMBER);
+
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(any(), any())).thenReturn(true);
+        when(personService.findContact(PERSON_ID)).thenReturn(contact());
+        when(tokenService.issue(user)).thenReturn("signed-jwt");
+        when(tokenService.expiresInSeconds()).thenReturn(3600L);
+        when(memberService.findMemberIdByPersonId(PERSON_ID)).thenReturn(Optional.of(42L));
+
+        var outcome = authService.login(new LoginRequest(USERNAME, "Socio123*"));
+
+        assertEquals(42L, ((TokenResponse) outcome).user().memberId());
     }
 
     @Test

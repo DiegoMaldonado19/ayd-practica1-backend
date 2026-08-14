@@ -2,8 +2,10 @@ package com.fitness.app.iam;
 
 import com.fitness.app.common.exception.BusinessException;
 import com.fitness.app.common.exception.ErrorCode;
+import com.fitness.app.directory.MemberService;
 import com.fitness.app.directory.PersonService;
 import com.fitness.app.directory.dto.PersonContactDTO;
+import com.fitness.app.iam.dto.AuthenticatedUser;
 import com.fitness.app.iam.dto.ChallengeResponse;
 import com.fitness.app.iam.dto.LoginOutcome;
 import com.fitness.app.iam.dto.LoginRequest;
@@ -12,6 +14,7 @@ import com.fitness.app.iam.dto.TokenResponse;
 import com.fitness.app.iam.dto.UserResponse;
 import com.fitness.app.iam.model.AppUser;
 import com.fitness.app.iam.model.CodeType;
+import com.fitness.app.iam.model.UserRole;
 import com.fitness.app.iam.model.UserStatus;
 import com.fitness.app.iam.model.VerificationCode;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ public class AuthService
     private final TokenService             tokenService;
     private final VerificationCodeService  verificationCodeService;
     private final PersonService            personService;
+    private final MemberService            memberService;
 
     public LoginOutcome login(LoginRequest request)
     {
@@ -79,6 +83,20 @@ public class AuthService
         ensureUsable(user);
 
         return openSession(user, personService.findContact(user.getPersonId()));
+    }
+
+    /**
+     * /auth/me answers here and not in UserService because the payload carries the
+     * member_id the two sign-in endpoints already stamp, and UserService cannot ask
+     * directory for it: MemberService injects UserService, so the arrow back would
+     * close a bean cycle. One resolution, one place.
+     */
+    @Transactional(readOnly = true)
+    public UserResponse currentUser(AuthenticatedUser principal)
+    {
+        var user = findOrFail(principal.appUserId());
+
+        return UserResponse.from(user, personService.findContact(user.getPersonId()), memberIdOf(user));
     }
 
     /**
@@ -156,7 +174,19 @@ public class AuthService
 
         return TokenResponse.bearer(tokenService.issue(user),
                                     tokenService.expiresInSeconds(),
-                                    UserResponse.from(user, contact));
+                                    UserResponse.from(user, contact, memberIdOf(user)));
+    }
+
+    /**
+     * Null for any role but MEMBER, and null too for a MEMBER whose file does not
+     * exist yet: registration is two steps and the account may come first, so a
+     * sign-in must not fail over a field the interface treats as optional.
+     */
+    private Long memberIdOf(AppUser user)
+    {
+        return user.getRole() == UserRole.MEMBER
+                ? memberService.findMemberIdByPersonId(user.getPersonId()).orElse(null)
+                : null;
     }
 
     private static ChallengeResponse toChallenge(VerificationCode code)

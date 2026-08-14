@@ -13,7 +13,7 @@ código y se consulta en `/swagger-ui.html` (redirige a la interfaz) o en crudo 
 | Tamaño | 292 archivos Java · 31 controladores · **128 endpoints** · 109 DTOs |
 | Base de datos | **31 tablas** · 97 restricciones `CHECK` con nombre `ck_` |
 | Catálogo de errores | 80 códigos en `ErrorCode` |
-| Pruebas | 88 unitarias en 14 clases · colección de Postman con 456 aserciones |
+| Pruebas | 89 unitarias en 14 clases · colección de Postman con 461 aserciones |
 
 ---
 
@@ -193,6 +193,19 @@ gym:
   nutrition:   { default-tolerance-percent: 10 }
 ```
 
+**La zona horaria no está aquí, y es a propósito.** `compose.yaml` fija `TZ: America/Guatemala`
+en los dos servicios. Las 32 llamadas a `LocalDate.now()` resuelven en la zona por defecto de la
+JVM, y los `DEFAULT CURRENT_DATE` del esquema (`member.joined_on`, `trainer_assignment.start_date`)
+en la del servidor de base de datos: una sola variable alinea las dos. En UTC —el valor por
+defecto de las imágenes— las seis horas posteriores a las 18:00 locales ya cuentan como el día
+siguiente, y un socio que registraba una comida a las 19:00 no podía editarla un minuto después
+porque `MealService.assertSameDay` la comparaba contra una fecha ya rodada.
+
+Va escrita y no como `${TZ:-...}`: con la forma parametrizada, un servidor que exporte `TZ` en su
+entorno ganaría la sustitución de compose y desharía la corrección en silencio. Postgres la lee
+en el `initdb`, así que un volumen ya creado conserva su `postgresql.conf`: hay que resembrar
+para que la tome.
+
 ---
 
 ## 7. Despliegue
@@ -227,14 +240,25 @@ suficiente antes de escribir el `.env` del servidor.
 
 | Qué | Cómo se corre | Estado |
 |---|---|---|
-| 88 pruebas unitarias, 14 clases | `mvn test` | 88/88, `BUILD SUCCESS` |
-| Colección de Postman, 456 aserciones | `node scripts/validate-api.js` | 453/456 |
+| 89 pruebas unitarias, 14 clases | `mvn test` | 89/89, `BUILD SUCCESS` |
+| Colección de Postman, 461 aserciones | `node scripts/validate-api.js` | 461/461 |
 
 Las unitarias son JUnit 5 con Mockito **sin contexto de Spring**: se ejecutan en segundos y
 prueban reglas de negocio, no cableado. La colección
 (`Docs/Fitness-App.postman_collection.json`) recorre la API contra un backend vivo; el runner
 añade en memoria un script que rellena los códigos de doble factor leyéndolos del log, porque
 son datos que solo conoce el usuario.
+
+**Tres casos exigen una precondición manual** y no pueden montarla solas dentro del recorrido,
+porque el estado que necesitan contradice el que dejaron las carpetas anteriores. Su aserción
+comprueba el `error_code` cuando la precondición se cumple y, si no, deja constancia con un
+`console.log` en lugar de fallar —el mismo patrón que ya usaba `Socio sin meta vigente`:
+
+| Caso | Precondición que hay que montar a mano |
+|---|---|
+| `Trainer Assignments › ...cupo lleno` | Llenar `max_member_load` del entrenador con otros socios y repetir contra un socio libre |
+| `Meals › ...socio no asignado` | Correrlo con el token de un entrenador que **no** tenga asignado al dueño de `/meals/1` |
+| `Meals › ...membresía no activa` | Congelar o cancelar antes la membresía del socio |
 
 ---
 
