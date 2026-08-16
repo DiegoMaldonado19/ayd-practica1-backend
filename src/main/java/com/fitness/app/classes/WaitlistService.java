@@ -156,6 +156,25 @@ public class WaitlistService
         return new PageImpl<>(sorted.subList(start, end), pageable, sorted.size());
     }
 
+    /**
+     * The caller's own pending queue across every session. findBySession is staff only,
+     * so without this a member has no way to learn the waitlistEntryId that confirm()
+     * and leave() take. Scoped by the same MemberService check those two use.
+     *
+     * A List and not a Page on purpose: PENDING already bounds this to the handful of
+     * sessions one member can be queued for at a time.
+     */
+    @Transactional(readOnly = true)
+    public List<WaitlistEntryResponse> findByMember(Long memberId, AuthenticatedUser principal)
+    {
+        memberService.findById(memberId, principal);
+
+        return waitlistEntryRepository.findByMemberIdAndStatusInOrderByRequestedAtAsc(memberId, PENDING)
+                .stream()
+                .map(WaitlistEntryResponse::from)
+                .toList();
+    }
+
     private WaitlistEntry findOrFail(Long waitlistEntryId)
     {
         return waitlistEntryRepository.findById(waitlistEntryId)

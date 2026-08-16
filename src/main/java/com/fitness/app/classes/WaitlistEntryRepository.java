@@ -36,6 +36,14 @@ public interface WaitlistEntryRepository extends JpaRepository<WaitlistEntry, Lo
     List<WaitlistEntry> findByClassSessionIdAndStatusInOrderByRequestedAtAsc(Long classSessionId,
                                                                              Collection<WaitlistStatus> statuses);
 
+    /**
+     * The member's own pending queue, for GET /members/{id}/waitlist-entries. A member
+     * cannot read the session queue -that one is staff only- so this is the only way they
+     * reach the waitlistEntryId that POST .../confirmations needs.
+     */
+    List<WaitlistEntry> findByMemberIdAndStatusInOrderByRequestedAtAsc(Long memberId,
+                                                                       Collection<WaitlistStatus> statuses);
+
     /** Stale reservations refreshWaitlist must expire before promoting the next member. */
     List<WaitlistEntry> findByClassSessionIdAndStatusAndConfirmationDeadlineBefore(Long classSessionId,
                                                                                    WaitlistStatus status, Instant now);

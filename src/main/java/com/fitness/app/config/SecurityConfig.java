@@ -129,6 +129,10 @@ public class SecurityConfig
                     .requestMatchers(HttpMethod.POST,  "/api/v1/waitlist-entries/*/confirmations").hasRole("MEMBER")
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/enrollments")
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
+                    // The member's own queue: the session queue above is staff only, so
+                    // this is the only route that hands them the id confirm() needs.
+                    .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/waitlist-entries")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
                     // training. Only the trainer-member relationship so far; the rest
                     // of §3.7 arrives with its own module. Everyone reads it -the
                                         // training. §3.7. GET /members/{id}/trainer y la transferencia ya
@@ -227,9 +231,14 @@ public class SecurityConfig
     {
         var configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        // Split on the surrounding spaces too: an origin that keeps a leading blank
+        // never matches, and the list comes from a secret written by hand.
+        configuration.setAllowedOrigins(List.of(allowedOrigins.split("\\s*,\\s*")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        // Not a CORS-safelisted response header: without this the SPA cannot read the
+        // filename of the four report downloads and falls back to a generic one.
+        configuration.setExposedHeaders(List.of("Content-Disposition"));
         configuration.setAllowCredentials(true);
 
         var source = new UrlBasedCorsConfigurationSource();
