@@ -1,18 +1,52 @@
-# ayd-practica1-backend
+# Fitness App — Backend
 
-## Running it
+API REST del Sistema de Gestión de Gimnasio (Práctica 1, Análisis y Diseño de Sistemas 1 — USAC
+CUNOC). Monolito modular sobre Spring Boot, con PostgreSQL y autenticación JWT con doble factor.
 
-### Everything in containers
+El contrato de la API no se transcribe aquí: lo genera SpringDoc desde el propio código y se
+consulta en `/swagger-ui.html`. El diseño y la operación están en
+[`Docs/Manual-Tecnico.md`](Docs/Manual-Tecnico.md).
+
+---
+
+## Tecnologías
+
+| Componente | Versión | Para qué |
+|---|---|---|
+| Java | **25** | Lenguaje. `records` para todos los DTOs |
+| Spring Boot | **4.1.0** | Parent POM; gestiona las versiones no fijadas abajo |
+| Spring Web MVC | (gestionada) | Controladores REST sobre Tomcat embebido |
+| Spring Data JPA + Hibernate | (gestionada) | Persistencia. `ddl-auto: validate` |
+| Spring Security | (gestionada) | Cadena de filtros, BCrypt, reglas por ruta y rol |
+| JJWT | **0.13.0** | Emisión y verificación del token de sesión (HS256) |
+| Spring Validation | (gestionada) | Bean Validation sobre los cuerpos de petición |
+| Spring Mail | (gestionada) | Envío de códigos 2FA y de recuperación |
+| SpringDoc OpenAPI | **3.1.0** | `/swagger-ui.html` y `/v3/api-docs` |
+| Apache POI | **5.4.1** | Exportación de reportes a XLSX |
+| OpenPDF | **2.0.3** | Exportación de reportes a PDF |
+| PostgreSQL | **17** (`postgres:17-alpine`) | Base de datos |
+| Lombok | (gestionada) | `@Getter/@Setter/@RequiredArgsConstructor` en entidades y servicios |
+| Maven | **3.9.16** (wrapper) | Construcción. Imagen `maven:3.9-eclipse-temurin-25` |
+| JUnit 5 + Mockito | (gestionada) | 89 pruebas unitarias en 14 clases, sin contexto de Spring |
+
+PNG e imagen de reportes se generan con `ImageIO`/`Graphics2D` del JDK: **sin dependencia extra**.
+
+---
+
+## Desarrollo local
+
+### Todo en contenedores
 
 ```bash
 docker compose up -d --wait
 ```
 
-Postgres runs `db/schema.sql` and `db/data.sql` the first time the data volume is
-created, and the application restarts on its own when a class changes.
+Postgres ejecuta `src/main/resources/db/schema.sql` y `data.sql` **solo la primera vez** que se crea
+el volumen de datos. La aplicación se reinicia sola cuando cambia una clase, porque el contenedor
+recompila `src/main` en un bucle y `spring-boot-devtools` detecta las clases nuevas.
 
-To rebuild the schema after editing `schema.sql`, drop **only** the data volume:
-`down -v` would also take `maven_repo` and cost a full dependency download.
+Para rehacer el esquema tras editar `schema.sql`, borra **solo** el volumen de datos —
+`down -v` también se llevaría `maven_repo` y costaría descargar todas las dependencias de nuevo:
 
 ```bash
 docker compose down
@@ -20,97 +54,183 @@ docker volume rm fitness-app-backend_postgres_data
 docker compose up -d --wait
 ```
 
-### Application on the host, database in a container
+### Aplicación en el host, base en contenedor
 
-Useful for attaching a debugger or for a faster restart loop.
+Útil para adjuntar un depurador o para un ciclo de reinicio más rápido.
 
 ```bash
-docker compose up -d postgres --wait   # only the database
-mvn clean test                          # unit tests, no database needed
-mvn spring-boot:run                     # reaches localhost:5432
+docker compose up -d postgres --wait   # solo la base
+mvn clean test                          # pruebas unitarias, no necesitan base
+mvn spring-boot:run                     # se conecta a localhost:5432
 ```
 
-Nothing to export and nothing to configure. `application.yml` imports the same
-`.env` that compose reads, so both ways of running use one single set of
-credentials; without a `.env`, the defaults of `compose.yaml` apply and a fresh
-clone starts as it is.
+No hay nada que exportar. `application.yml` importa el mismo `.env` que lee compose, así que las dos
+formas de ejecutar usan un único juego de credenciales; sin `.env`, aplican los valores por defecto
+de `compose.yaml` y un clon recién bajado arranca tal cual.
 
-| Where it runs | Where the credentials come from |
+| Dónde corre | De dónde salen las credenciales |
 |---|---|
-| `docker compose up` | compose expands `.env` into `SPRING_DATASOURCE_*`, which outranks `application.yml` |
-| `mvn spring-boot:run` | Spring imports `./.env` directly |
-| Neither file present | `fitness / fitness_dev / fitness_db`, the defaults in both files |
+| `docker compose up` | compose expande `.env` en `SPRING_DATASOURCE_*`, que gana sobre `application.yml` |
+| `mvn spring-boot:run` | Spring importa `./.env` directamente |
+| Sin ninguno de los dos | `fitness / fitness_dev / fitness_db`, los defaults de ambos archivos |
 
-### First sign-in
+### Primer inicio de sesión
 
-`admin` / `Admin123*`, seeded by `db/data.sql`. Change it on the server with
+`admin` / `Admin123*`, sembrado por `db/data.sql`. **Cámbialo en el servidor** con
 `PUT /api/v1/users/me/password`.
 
 - API: `http://localhost:8080/api/v1`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- Postman collection: [`Docs/Fitness-App.postman_collection.json`](Docs/Fitness-App.postman_collection.json)
+- Colección de Postman: [`Docs/Fitness-App.postman_collection.json`](Docs/Fitness-App.postman_collection.json)
 
-Where the two-factor and recovery codes end up depends on `.env`:
+Dónde caen los códigos de doble factor y de recuperación depende de `.env`:
 
-| `MAIL_USERNAME` / `MAIL_PASSWORD` | Delivery |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | Entrega |
 |---|---|
-| empty | written to the application log: `docker logs fitness_backend \| grep -i verification` |
-| set | sent by mail, and **no longer written to the log** |
+| vacíos | al log: `docker logs fitness_backend \| grep -i verification` |
+| configurados | por correo, y **ya no** se escriben en el log |
 
-Leave them empty for local work. The bootstrap administrator carries
-`admin@fitnessapp.local`, a domain that does not exist, so with SMTP configured its
-code leaves towards a dead address and the message bounces. Members created through
-`POST /members` carry a real address and do receive it.
+Déjalos vacíos para trabajar en local. El administrador sembrado usa `admin@fitnessapp.local`, un
+dominio que no existe, así que con SMTP configurado su código rebota. Los socios creados con
+`POST /members` llevan una dirección real y sí lo reciben.
 
-## Deployment
+### Frontend contra este backend
 
-`docker-push` and `deploy` only run on `main`. The deploy step writes the server's
-`.env` from the repository secrets and then brings compose up, so **the file on the
-server is generated, never pulled** — which is why `.gitignore` keeps `.env` out of
-git. Committing it would make `git pull origin main` fail on the second deploy.
+El SPA vive en otro repositorio y llama a este servicio **cruzando origen** (`:5173` → `:8080`), así
+que los dos valores tienen que casar:
 
-| Secret | Required | What happens if it is missing |
+| Repositorio | Variable | Valor en local |
+|---|---|---|
+| Backend | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` |
+| Frontend | `VITE_API_BASE_URL` | `http://localhost:8080` |
+
+---
+
+## Gitflow
+
+Tres niveles de rama, y ningún commit directo sobre las dos protegidas:
+
+```
+                    PR                     PR
+rama de trabajo  ──────▶   stage   ───────────▶   main
+(sale de stage)          (integración)          (producción)
+```
+
+1. **`main`** — lo que está desplegado. Solo entra por PR desde `stage`.
+2. **`stage`** — rama de integración. Solo entra por PR desde una rama de trabajo.
+3. **Ramas de trabajo** — se crean **desde `stage`**, nunca desde `main`.
+
+Convención de nombres, tal como aparece en el historial: `dmaldonado/<tema>`
+(`dmaldonado/iam-module`, `dmaldonado/reports-module`, `dmaldonado/final-audit`).
+
+```bash
+git checkout stage && git pull origin stage
+git checkout -b dmaldonado/<tema>
+# ...trabajo...
+git push -u origin dmaldonado/<tema>     # abre PR contra stage
+```
+
+Qué dispara cada rama en CI (`.github/workflows/ci-cd.yml`):
+
+| Rama | `build` | `docker-push` | `deploy` |
+|---|:--:|:--:|:--:|
+| rama de trabajo | sí | no | no |
+| `stage` | sí | no | no |
+| `main` | sí | sí | sí |
+
+---
+
+## Estructura de paquetes
+
+Un paquete por dominio, y dentro de cada uno la misma forma: `controller` (HTTP), `service` (reglas
+de negocio), `repository` (persistencia), `model` (entidades JPA y enums) y `dto` (contrato de
+entrada y salida). **Ninguna entidad JPA sale a la red**: todo lo que cruza el borde HTTP es un
+`record` de `dto`.
+
+```
+com.fitness.app
+├── iam            autenticación, JWT, doble factor, cuentas de usuario
+├── directory      personas, socios, empleados, entrenadores
+├── membership     planes, contratación, congelamiento, renovación, vencimiento
+├── access         control de acceso, visitas (check-in/out), pases de invitado
+├── classes        clases grupales, sesiones, inscripción, lista de espera, asistencia
+├── training       asignación de entrenador, rutinas, mediciones, notas, alertas
+├── nutrition      catálogo de alimentos, comidas, meta calórica, resumen diario
+├── billing        pagos, confirmación, anulación, comprobantes, promociones
+├── report         los 9 reportes y su exportación a CSV/XLSX/PDF/PNG
+├── notification   avisos persistidos para el socio
+├── common         ErrorCode, BusinessException, GlobalExceptionHandler, ErrorResponse
+└── config         SecurityConfig, JwtAuthenticationFilter, CORS, OpenAPI, GymProperties
+```
+
+Clases que conviene conocer antes de tocar nada:
+
+| Clase | Por qué importa |
+|---|---|
+| `config/SecurityConfig` | **Toda** la autorización vive aquí, en matchers por ruta y método. No hay `@PreAuthorize` en el proyecto |
+| `config/JwtAuthenticationFilter` | Valida el token y construye el `AuthenticatedUser` que reciben los controladores |
+| `common/exception/ErrorCode` | Catálogo único: cada constante lleva su HTTP, su `suggested_action` y su mensaje |
+| `common/exception/GlobalExceptionHandler` | Traduce toda falla al mismo `ErrorResponse` |
+| `config/GymProperties` | Las reglas que el enunciado deja al equipo (congelamiento, cupos, márgenes) |
+
+La autorización por fila **no** está en `SecurityConfig`: que el rol permita la ruta no basta. Un
+entrenador solo ve a los socios asignados y un socio solo su propio expediente; eso lo comprueban
+los servicios (`MemberService.findById(id, principal)`), que responden `TRAINER_SCOPE_VIOLATION` o
+`FORBIDDEN_RESOURCE`.
+
+---
+
+## Convenciones
+
+- **Idioma**: código, nombres y comentarios en inglés. Documentación en español.
+- **Llaves estilo Allman**, y asignaciones alineadas verticalmente.
+- **Nomenclatura**: clases y DTOs en `UpperCamelCase`; métodos y variables en `lowerCamelCase`;
+  constantes en `SCREAMING_SNAKE_CASE`.
+- **El payload va en `snake_case`, el campo Java en `lowerCamelCase`.** Lo resuelve
+  `spring.jackson.property-naming-strategy: SNAKE_CASE` para los cuerpos. Ojo: eso **no** aplica a
+  los parámetros de consulta, que llevan `@RequestParam(name = "member_id")` explícito.
+- **DTOs son `record`**, uno por caso de uso, con la validación declarada en el propio record.
+- **El esquema manda sobre Hibernate**: `ddl-auto: validate`. La base la define `db/schema.sql`, no
+  las entidades; si una entidad y su tabla se separan, la aplicación no arranca.
+- **Un solo formato de error**: todo lo que falla sale como `ErrorResponse`, y el código se decide
+  únicamente en `ErrorCode`.
+- **Al capturar una excepción**, se pasa como último argumento a SLF4J y sin `{}` propio, para que
+  imprima la traza completa con archivo y línea.
+
+---
+
+## Dependencias
+
+| Dependencia | Rol en el proyecto |
+|---|---|
+| **Spring Web MVC** | Los 30+ controladores REST sobre Tomcat embebido |
+| **Spring Data JPA** | Repositorios y entidades. Las consultas de reportes son SQL nativo en `ReportRepository` |
+| **PostgreSQL Driver** | Conexión JDBC |
+| **Spring Security + JJWT** | Autenticación, BCrypt y las reglas por rol de la cadena de filtros |
+| **Validation** | Bean Validation sobre los cuerpos; produce `VALIDATION_ERROR` con `field_errors` |
+| **Java Mail Sender** | Códigos de doble factor y recuperación. Sin SMTP, caen al log |
+| **SpringDoc OpenAPI** | `/swagger-ui.html`, entrada directa del manual técnico |
+| **Apache POI + OpenPDF** | Exportación de reportes a XLSX y PDF |
+| **Lombok** | Reduce el boilerplate de entidades y servicios. Excluido del jar final |
+| **Spring Boot DevTools** | Reinicia la aplicación cuando cambian las clases compiladas; es lo que hace que `docker compose up -d` recoja cambios sin reconstruir |
+
+---
+
+## Despliegue
+
+`docker-push` y `deploy` solo corren en `main`. El paso de despliegue **genera** el `.env` del
+servidor desde los secretos del repositorio y luego levanta compose, por eso `.gitignore` mantiene
+`.env` fuera de git: commitearlo haría fallar el `git pull origin main` del segundo despliegue.
+`.env.example` es la plantilla versionada de ese mismo archivo.
+
+| Secreto | ¿Obligatorio? | Qué pasa si falta |
 |---|:--:|---|
-| `EC2_SSH_KEY`, `SERVER_USER`, `SERVER_HOST`, `REPO_PATH` | yes | No connection to the server. |
-| `POSTGRES_PASSWORD` | yes | The deploy aborts instead of falling back to the dev password. |
-| `POSTGRES_DB`, `POSTGRES_USER` | no | Fall back to `fitness_db` and `fitness`. |
-| `JWT_SECRET` | yes | The deploy aborts. It is also rejected under 32 characters, because HS256 would then fail at startup and every sign-in would answer 500. |
-| `CORS_ALLOWED_ORIGINS` | no | Falls back to `http://<SERVER_HOST>:5173`. |
-| `MAIL_USERNAME`, `MAIL_PASSWORD` | no | No mail server: the verification codes go to the application log. |
+| `EC2_SSH_KEY`, `SERVER_USER`, `SERVER_HOST`, `REPO_PATH` | sí | No hay conexión con el servidor |
+| `POSTGRES_PASSWORD` | sí | El despliegue aborta en vez de caer al password de desarrollo |
+| `POSTGRES_DB`, `POSTGRES_USER` | no | Caen a `fitness_db` y `fitness` |
+| `JWT_SECRET` | sí | El despliegue aborta. También se rechaza con menos de 32 caracteres, porque HS256 fallaría al arrancar y todo inicio de sesión respondería 500 |
+| `CORS_ALLOWED_ORIGINS` | no | Cae a `http://<SERVER_HOST>:5173` |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | no | Sin servidor de correo: los códigos van al log |
 
-`.env.example` is the committed template of that same file.
-
-## Dependencies
-
-### Spring Boot DevTools - DEVELOPER TOOLS
-Restarts the running application when the compiled classes change, which is what
-makes `docker compose up -d` pick up code changes without a rebuild.
-
-### Spring Web - WEB
-Build web, including RESTful, applications using Spring MVC. Uses Apache Tomcat
-as the default embedded container.
-
-### Lombok - DEVELOPER TOOLS
-Java annotation library which helps to reduce boilerplate code.
-
-### Spring Data JPA - SQL
-Persist data in SQL stores with Java Persistence API using Spring Data and
-Hibernate.
-
-### PostgreSQL Driver - SQL
-A JDBC and R2DBC driver that allows Java programs to connect to a PostgreSQL
-database using standard, database independent Java code.
-
-### Spring Security + JJWT - SECURITY
-Authentication, BCrypt hashing and the per-role rules of the filter chain. JJWT
-issues and verifies the session token the SPA carries.
-
-### Validation - I/O
-Bean Validation on the request bodies, which is what produces `VALIDATION_ERROR`.
-
-### Java Mail Sender - I/O
-Sends the two-factor and password recovery codes. Without SMTP configured the code
-falls back to the application log.
-
-### SpringDoc OpenAPI - WEB
-Serves `/swagger-ui.html`, a direct input for the technical manual.
+El detalle de la infraestructura (EC2, Docker Hub, los tres jobs) está en el
+[Manual Técnico](Docs/Manual-Tecnico.md), sección 8.
