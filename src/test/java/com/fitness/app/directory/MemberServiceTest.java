@@ -21,14 +21,19 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -126,6 +131,32 @@ class MemberServiceTest
                      assertThrows(BusinessException.class,
                                   () -> memberService.findById(MEMBER_ID, principal(UserRole.TRAINER)))
                              .getErrorCode());
+    }
+
+    @Test
+    void narrowsTheListingToTheCaseloadOfATrainer()
+    {
+        // The detail rejects a file outside the caseload; the listing has to narrow
+        // instead, or the whole directory of the gym leaks through GET /members.
+        when(trainerService.findTrainerIdByUser(principal(UserRole.TRAINER))).thenReturn(TRAINER_ID);
+        when(trainerAssignmentServiceProvider.getObject()).thenReturn(trainerAssignmentService);
+        when(trainerAssignmentService.assignedMemberIds(TRAINER_ID)).thenReturn(List.of(MEMBER_ID));
+        when(memberRepository.search(any(), anyBoolean(), any(), any(), any())).thenReturn(Page.empty());
+
+        memberService.search(null, null, null, principal(UserRole.TRAINER), Pageable.unpaged());
+
+        verify(memberRepository).search(null, true, List.of(MEMBER_ID), "", Pageable.unpaged());
+    }
+
+    @Test
+    void leavesTheListingWideOpenForTheAdministrator()
+    {
+        when(memberRepository.search(any(), anyBoolean(), any(), any(), any())).thenReturn(Page.empty());
+
+        memberService.search(null, null, null, principal(UserRole.ADMIN), Pageable.unpaged());
+
+        // filterByMembership false: the sentinel id list is never applied.
+        verify(memberRepository).search(null, false, List.of(0L), "", Pageable.unpaged());
     }
 
     @Test

@@ -78,10 +78,13 @@ public class SecurityConfig
                     // directory. Whether a member reaches *this* file is decided in
                     // MemberService: a matcher sees the path, not the row behind it.
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER")
-                    .requestMatchers(HttpMethod.POST,  "/api/v1/members").hasAnyRole("ADMIN", "RECEPTIONIST")
+                    // "El administrador puede dar de alta nuevos socios, empleados y
+                    // entrenadores" (Enunciado): el alta y la edición del expediente son
+                    // suyas. El recepcionista consulta, cobra y controla el acceso.
+                    .requestMatchers(HttpMethod.POST,  "/api/v1/members").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/members/*/status").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "TRAINER", "MEMBER")
-                    .requestMatchers(HttpMethod.PUT,   "/api/v1/members/*").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
+                    .requestMatchers(HttpMethod.PUT,   "/api/v1/members/*").hasAnyRole("ADMIN", "MEMBER")
                     .requestMatchers(HttpMethod.GET,   "/api/v1/members/*/memberships").hasAnyRole("ADMIN", "RECEPTIONIST", "MEMBER")
                     .requestMatchers("/api/v1/employees/**").hasRole("ADMIN")
                     // A member reads the trainers to choose one; only the administrator writes them.
