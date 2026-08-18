@@ -59,11 +59,13 @@ public class MemberController
                                            MembershipStatus membershipStatus,
                                            @RequestParam(required = false)
                                            String           search,
+                                           @AuthenticationPrincipal
+                                           AuthenticatedUser principal,
                                            Pageable         pageable)
     {
         var memberIds = membershipService.findMemberIds(planCode, membershipStatus);
 
-        return new PagedModel<>(memberService.search(status, memberIds, search, pageable));
+        return new PagedModel<>(memberService.search(status, memberIds, search, principal, pageable));
     }
 
     @PostMapping

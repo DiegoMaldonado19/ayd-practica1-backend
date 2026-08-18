@@ -59,13 +59,35 @@ public class MemberService
      * bind a null list into an IN, and no member has id 0.
      */
     @Transactional(readOnly = true)
-    public Page<MemberResponse> search(MemberStatus status, List<Long> memberIds, String search, Pageable pageable)
+    public Page<MemberResponse> search(MemberStatus status, List<Long> memberIds, String search,
+                                       AuthenticatedUser principal, Pageable pageable)
     {
-        var filterByMembership = memberIds != null;
-        var ids                = memberIds == null || memberIds.isEmpty() ? List.of(0L) : memberIds;
+        var scopedIds          = scopeToCaseload(memberIds, principal);
+        var filterByMembership = scopedIds != null;
+        var ids                = scopedIds == null || scopedIds.isEmpty() ? List.of(0L) : scopedIds;
 
         return memberRepository.search(status, filterByMembership, ids, search == null ? "" : search, pageable)
                 .map(MemberResponse::from);
+    }
+
+    /**
+     * The listing side of the rule assertOwnFile enforces one row at a time: a trainer
+     * sees "la lista de socios que tiene asignados de forma personal" (Enunciado) and
+     * not the directory of the gym. A listing narrows where a detail rejects, so the
+     * caseload is intersected with whatever filter membership already resolved.
+     */
+    private List<Long> scopeToCaseload(List<Long> memberIds, AuthenticatedUser principal)
+    {
+        if (principal.role() != UserRole.TRAINER)
+        {
+            return memberIds;
+        }
+
+        var caseload = trainerAssignmentServiceProvider.getObject()
+                .assignedMemberIds(trainerService.findTrainerIdByUser(principal));
+
+        return memberIds == null ? caseload
+                                 : memberIds.stream().filter(caseload::contains).toList();
     }
 
     @Transactional(readOnly = true)
