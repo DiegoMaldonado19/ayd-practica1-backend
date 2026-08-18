@@ -73,6 +73,22 @@ public class TrainerAssignmentService
     }
 
 
+    /**
+     * Los socios que el entrenador tiene asignados hoy. directory.MemberService la usa
+     * para acotar el listado: "la lista de socios que tiene asignados de forma personal"
+     * (Enunciado, §Entrenador).
+     *
+     * @param trainerId id del entrenador
+     * @return ids de los socios con asignación vigente
+     */
+    @Transactional(readOnly = true)
+    public List<Long> assignedMemberIds(Long trainerId)
+    {
+        return trainerAssignmentRepository.findByTrainerIdAndEndDateIsNull(trainerId).stream()
+                .map(TrainerAssignment::getMemberId)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     /**
      * Indica si un trainer está asignado actualmente a un socio.
